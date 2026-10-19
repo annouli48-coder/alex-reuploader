@@ -1,4 +1,5 @@
-import { parseImport, normalizeReferenceId } from './scan-import.js';
+import { normalizeReferenceId } from './scan-import.js';
+import { scanBinaryPlace } from './rbxl-reader.js';
 
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
@@ -7,16 +8,18 @@ const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null
 function loadSaved() {
   try {
     const data = JSON.parse(localStorage.getItem(STORE) || '{}');
-    if (Array.isArray(data.items)) state.items = data.items.filter(x => /^\d+$/.test(x.id)).slice(0, 10000);
+    if (data.scanFormat === 'rbxl' && Array.isArray(data.items)) state.items = data.items.filter(x => /^\d+$/.test(x.id)).slice(0, 10000);
     if (data.mapping && typeof data.mapping === 'object') {
       for (const [oldId, newId] of Object.entries(data.mapping)) if (/^\d+$/.test(oldId) && /^\d+$/.test(String(newId))) state.mapping[oldId] = String(newId);
     }
-    state.scanCount = Number(data.scanCount) || 0;
-    if (data.insights && typeof data.insights === 'object') state.insights = data.insights;
+    if (data.scanFormat === 'rbxl') {
+      state.scanCount = Number(data.scanCount) || 0;
+      if (data.insights && typeof data.insights === 'object') state.insights = data.insights;
+    }
   } catch { /* Browser storage may be empty or inaccessible. */ }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights })); } catch { toast('Could not save to this browser. Export your map now.'); }
+  try { localStorage.setItem(STORE, JSON.stringify({ scanFormat: 'rbxl', items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights })); } catch { toast('Could not save to this browser. Export your map now.'); }
 }
 function toast(message) {
   const target = $('toast'); target.textContent = message; target.classList.add('visible');
@@ -32,8 +35,7 @@ function typeOf(item) {
   if (item.className === 'SurfaceAppearance' || /image/i.test(item.className)) return 'Image';
   return 'Decal';
 }
-function parseScan(raw, filename = '') {
-  const doc = parseImport(raw, filename);
+function parseScan(doc) {
   if (!doc || !Array.isArray(doc.items)) throw new Error('Expected a scan with an "items" array.');
   if (doc.items.length > 30000) throw new Error('Scan is too large (maximum 30,000 references). Select a smaller section in Studio.');
   const byId = new Map();
@@ -255,21 +257,19 @@ async function upload(event) {
 
 document.querySelectorAll('[data-screen]').forEach(b => b.addEventListener('click', () => show(b.dataset.screen)));
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => show(b.dataset.goto)));
-$('parseManifest').addEventListener('click', () => { try { toast(parseScan($('manifestInput').value)); } catch (e) { toast(e.message); } });
 $('manifestFile').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
-  if (file.size > 6_000_000) return toast('Scan is over 6 MB. Export a smaller selection.');
-  try { const input = await file.text(); $('manifestInput').value = input; toast(parseScan(input, file.name)); } catch (e) { toast(e.message); }
+  if (!/\.rbxl$/i.test(file.name)) return toast('Choose a Roblox place file ending in .rbxl.');
+  if (file.size > 150_000_000) return toast('RBXL is over 150 MB. Save or scan a smaller place.');
+  $('scanStatus').textContent = `Reading ${file.name} locally…`;
+  try {
+    const buffer = await file.arrayBuffer();
+    const result = scanBinaryPlace(buffer);
+    const message = parseScan(result);
+    $('scanStatus').textContent = `${result.totalInstances.toLocaleString()} instances examined. ${message}`;
+    toast(message);
+  } catch (e) { $('scanStatus').textContent = e.message; toast(e.message); }
   finally { event.target.value = ''; }
-});
-$('demoBtn').addEventListener('click', () => {
-  const demo = { groupId: 548271796, items: [
-    { path: 'Workspace.Music.MainTheme', name: 'MainTheme', className: 'Sound', property: 'SoundId', assetId: '123456789' },
-    { path: 'Workspace.Music.Speaker', name: 'Speaker', className: 'Sound', property: 'SoundId', assetId: '123456789' },
-    { path: 'ReplicatedStorage.Animations.Dance', name: 'Dance', className: 'Animation', property: 'AnimationId', assetId: '234567890' },
-    { path: 'Workspace.Sign.Decal', name: 'Sign', className: 'Decal', property: 'Texture', assetId: '345678901' },
-  ] };
-  $('manifestInput').value = JSON.stringify(demo, null, 2); toast(parseScan($('manifestInput').value));
 });
 $('filterAsset').addEventListener('input', renderAssets); $('typeFilter').addEventListener('change', renderAssets);
 $('targetAsset').addEventListener('change', selectedType);

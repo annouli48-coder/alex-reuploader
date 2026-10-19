@@ -1,13 +1,12 @@
 # ALEX Reuploader
 
-Creator-authorized Roblox asset reupload workspace with a Studio plugin and a Railway-ready website.
+Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, a Studio ID-mapping plugin, and a Railway-ready website.
 
 ## What works
 
-- Studio plugin scans all asset references, or only sounds and animations (including modern `AudioPlayer` references), in the current selection or the entire open place. The website groups by old ID and displays service-level location counts, audio/animation counts, and read-only script/value reference counts.
-- Like the scanning options demonstrated in Harmless Asset Manager, the plugin includes optional **SCRIPT IDS** and **VALUE IDS** source switches, as well as a path filter (e.g., `ReplicatedStorage.Animations`). These source scans only extract clearly associated sound/animation IDs, not arbitrary numbers or script contents.
-- Use the Studio animation asset picker to select existing animations not currently placed in the game, and import saved `.json` scans from inside the plugin.
-- Import `.json`, `.csv`, `.rbxmx` (Roblox XML model) or `.rbxlx` (Roblox XML place) files on the website. XML imports extract Sound/AudioPlayer/Animation references directly in the browser without uploading the scan file to the server. CSV needs `assetId,type` columns.
+- The website file picker accepts **only `.rbxl`** Roblox place files (binary format). It reads the file locally in the browser, finds `Sound`, `Animation`, and common `AudioPlayer` asset references, and displays location counts and asset-ID lists. The place file is never uploaded to ALEX.
+- The `.rbxl` parser handles standard compressed (LZ4) and uncompressed chunks. It recognizes clear `SoundId`/`AnimationId` references embedded in scripts and appropriately named value objects where those strings are serialized in the file.
+- The optional Studio plugin can scan an open project separately, select an existing animation from Roblox's own picker, and apply a copied `old_id=new_id` map with Undo support. It is no longer required for uploading scan data to the website.
 - Sign in with Roblox using **OAuth 2.0 authorization code + PKCE**; app secrets stay on the server.
 - Upload a **file you own or may redistribute** via Roblox's Open Cloud Assets API. Optional group target is checked by Roblox; entering a group ID does not grant upload permission.
 - Poll Roblox's asset operation to obtain a new asset ID; export `old_id=new_id` mapping to the Studio plugin for editing, with Studio Undo support.
@@ -24,7 +23,7 @@ npm test
 npm start
 ```
 
-Open `http://localhost:3000`. You can import scans without OAuth credentials. Actual sign-in and upload need configuration below.
+Open `http://localhost:3000`. You can scan an `.rbxl` without OAuth credentials. Actual sign-in and upload need configuration below.
 
 ## Deploy the website to Railway
 
@@ -44,18 +43,26 @@ Open `http://localhost:3000`. You can import scans without OAuth credentials. Ac
 
 **Do not publish an OAuth secret, Roblox `.ROBLOSECURITY` cookie, or API key in the plugin, HTML, or GitHub.** This app uploads through the individual user's scoped OAuth session; it does **not** require `ROBLOX_ASSET_API_KEY` or any Roblox cookie.
 
-### Set up the Studio plugin
+### Scan your .RBXL file
+
+1. Open your own experience in Roblox Studio.
+2. Use **File → Save to File** and save the place in binary `.rbxl` format.
+3. Open the ALEX website → **Asset scanner** → **Choose .RBXL file**. No plugin or JSON export is needed.
+4. Review the detected sounds, animations, and expandable service/folder hierarchy. The scanner reads asset references, **not** the original downloadable sound/animation bytes.
+5. Sign in with Roblox to upload permitted original media files. Each successful upload creates a new Roblox asset ID, which is mapped to the original reference.
+
+The site file picker intentionally **does not** accept `.rbxlx`, `.rbxmx`, `.rbxm`, `.json` or `.csv`. Binary RBXL parsing is best-effort: unknown future property types or encrypted/non-standard serialization may not be recognized. The browser file-size limit is 150 MB.
+
+### Optional: Apply new IDs using the Studio plugin
 
 The included `studio/ALEX_REUPLOADER_PLUGIN.rbxmx` is a **Studio plugin**, not an executor script.
 
 1. Import the plugin into Roblox Studio as a local plugin.
 2. Open the toolbar's **ALEX Reuploader** panel.
-3. Click **SCAN SOUNDS + ANIMATIONS** to find media references, or **SCAN ALL ASSET REFERENCES** for every supported asset property. Select model(s) first to limit the scan; leaving nothing selected scans the whole place. Enable the **SCRIPT IDS** or **VALUE IDS** switches to include recognizable IDs in script assignments or numeric/string values. You may optionally enter a path such as `ReplicatedStorage.Animations`.
-4. To add an animation from your own Roblox inventory that is not used in your place, click **PICK AN ANIMATION FROM MY ASSETS**. For a previously saved Studio scan, use **IMPORT A SAVED SCAN (.JSON)**. Studio's public plugin picker currently supports animations only, not an exhaustive Asset Manager inventory of sounds.
-5. Copy the JSON into the website's **Asset scanner**, or upload a `.json`, `.csv`, `.rbxmx` or `.rbxlx` scan file there. The website shows sound/animation counts, unique IDs, and where it found them. `.rbxmx`/`.rbxlx` XML files scan recognizable script and value references as well as instance properties. Binary `.rbxm` and `.rbxl` files must be opened in Studio and scanned with the plugin or re-exported as XML; they cannot be directly imported into this website. The plugin cannot list every sound shown in Studio's Asset Manager.
-6. For each supported asset, use **Upload ↗**, select its own original file, and publish. You must have rights to that file.
-7. Copy the resulting `old_id=new_id` map from **Reupload queue** and paste it into the plugin's second text box.
-8. Click **APPLY ID MAP TO STUDIO**. Use Ctrl+Z in Studio to undo if needed.
+3. After completing authorized uploads on the website, copy the resulting `old_id=new_id` map from **Reupload queue**.
+4. Paste that map into the plugin's second text box, then click **APPLY ID MAP TO STUDIO**. Use Ctrl+Z in Studio to undo if needed.
+
+The plugin also includes advanced read-only project scanning tools. You can ignore them when using the website's `.rbxl` scanner.
 
 ## Gamepasses & usage
 
@@ -71,6 +78,7 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 ## Security & limitations
 
 - The app never downloads locked audio, animations, or assets from other creators to evade permission controls. It can't reconstruct original media from numeric asset IDs alone.
+- RBXL binary decoding is based on the [RobloxAPI binary format specification](https://github.com/RobloxAPI/spec/blob/master/formats/rbxl.md), with size limits and malformed-file checks. It does not execute script content from the file.
 - `Mesh` asset content is not generally uploadable from an arbitrary `.fbx` as type Mesh using the standard Assets API; use Studio Importer, then apply new references manually.
 - Audio must meet Roblox's duration and upload quota limits; maximum media file size here is 20 MB.
 - A successful API request may return a processing operation. Wait for the new asset ID, then paste the map. Do not retry immediately if polling times out; verify on Creator Dashboard to avoid duplicates.

@@ -23,7 +23,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="safety-note"><span>◉</span><div><strong>Creator-first</strong><small>Only upload assets you own or have permission to use.</small></div></div>
-        <div class="side-footer">ALEX REUPLOADER <span>v1.2</span></div>
+        <div class="side-footer">ALEX REUPLOADER <span>v1.3 · RBXL</span></div>
       </div>
     </aside>
 
@@ -53,22 +53,21 @@
           </div>
 
           <div class="two-grid"><article class="panel getting-started"><div class="panel-head"><div><span class="panel-kicker">YOUR WORKFLOW</span><h2>Get started in 3 steps</h2></div><span class="mini-tag">EASY SETUP</span></div>
-              <div class="step"><span class="step-no">01</span><div><strong>Scan references in Roblox Studio</strong><p>Install the ALEX plugin, scan the place or selection, then copy the generated JSON.</p></div><span class="step-arrow">↗</span></div>
-              <div class="step"><span class="step-no">02</span><div><strong>Import &amp; upload original files</strong><p>Paste or import the scan. Choose your owned audio, animation, image, or model files.</p></div><span class="step-arrow">↗</span></div>
+              <div class="step"><span class="step-no">01</span><div><strong>Choose a Roblox .RBXL place file</strong><p>Save your experience to a .rbxl file in Roblox Studio, then select that file on the ALEX scanner.</p></div><span class="step-arrow">↗</span></div>
+              <div class="step"><span class="step-no">02</span><div><strong>Review &amp; upload original files</strong><p>ALEX scans your RBXL locally for sound and animation IDs. Choose your authorized original media files.</p></div><span class="step-arrow">↗</span></div>
               <div class="step"><span class="step-no">03</span><div><strong>Copy your replacement map</strong><p>After Roblox confirms the upload, copy the map into the plugin and apply changes with Undo support.</p></div><span class="step-arrow">↗</span></div>
             </article>
             <article class="panel status-panel"><div class="panel-head"><div><span class="panel-kicker">INTEGRATION</span><h2>Connection status</h2></div></div>
               <div class="connection-row"><div class="connection-icon">R</div><div><strong>Roblox Open Cloud</strong><small id="oauthStatus">Checking server configuration…</small></div><span class="status-pill" id="oauthPill">CHECKING</span></div>
-              <div class="connection-row"><div class="connection-icon">S</div><div><strong>Studio scanner</strong><small>Import a scan from your plugin</small></div><span class="status-pill muted" id="scannerPill">AWAITING SCAN</span></div>
+              <div class="connection-row"><div class="connection-icon">S</div><div><strong>RBXL file scanner</strong><small>Choose a saved binary .rbxl place file</small></div><span class="status-pill muted" id="scannerPill">AWAITING SCAN</span></div>
               <div class="callout"><span>✳</span><div><strong>Heads up</strong><p>An asset ID is a reference, not the original media file. Roblox only accepts uploads you can legitimately provide.</p></div></div>
             </article>
           </div>
         </section>
 
         <section class="screen hidden" id="screen-assets">
-          <div class="screen-heading"><div><span class="page-eyebrow">01 / DISCOVER</span><h1>Asset scanner<span class="heading-dot">.</span></h1><p>Find animations and sounds from your Studio project or exported file. No manual ID entry.</p></div><button class="btn btn-ghost" id="demoBtn">Load sample scan ↗</button></div>
-          <div class="panel import-panel"><div class="import-icon">↧</div><div class="import-copy"><strong>Import a scan or Roblox XML file</strong><p>Use the ALEX Studio plugin, or choose a .json, .csv, .rbxmx or .rbxlx file. XML imports find animation and sound references locally in your browser.</p></div><label class="btn btn-outline file-label">Choose scan file<input type="file" id="manifestFile" accept=".json,.csv,.rbxmx,.rbxlx,.txt,application/json,text/csv" hidden /></label></div>
-          <div class="paste-panel"><textarea id="manifestInput" spellcheck="false" placeholder='{ "groupId": 548271796, "items": [ ... ] }'></textarea><button class="btn btn-primary" id="parseManifest">Import references <span>→</span></button></div>
+          <div class="screen-heading"><div><span class="page-eyebrow">01 / DISCOVER</span><h1>RBXL scanner<span class="heading-dot">.</span></h1><p>Scan sounds and animations directly from your saved Roblox place file.</p></div></div>
+          <div class="panel import-panel"><div class="import-icon">↧</div><div class="import-copy"><strong>Select a .RBXL file</strong><p>Only binary Roblox place files (.rbxl) are accepted. The scan runs in your browser; your place file is never uploaded.</p><small id="scanStatus" role="status">Waiting for a .rbxl file (max 150 MB).</small></div><label class="btn btn-primary file-label">Choose .RBXL file<input type="file" id="manifestFile" accept=".rbxl" hidden /></label></div>
           <article class="panel insights-panel hidden" id="insightsPanel">
             <div class="panel-head"><div><span class="panel-kicker">ASSET INSIGHTS</span><h2>Where your media lives</h2></div><span class="mini-tag">READ-ONLY SCAN</span></div>
             <div class="insights-metrics"><div><small>ANIMATION REFERENCES</small><strong id="animationReferences">0</strong></div><div><small>SOUND REFERENCES</small><strong id="soundReferences">0</strong></div><div><small>FOUND INSIDE SCRIPTS</small><strong id="scriptReferences">0</strong></div><div><small>FOUND IN VALUES</small><strong id="valueReferences">0</strong></div></div>
@@ -76,7 +75,7 @@
             <div id="locationList" class="location-list"></div>
           </article>
           <div class="section-toolbar"><div><span class="panel-kicker">DISCOVERED ASSETS</span><h2>References <span class="count-bubble" id="assetCount">0</span></h2></div><div class="filters"><input id="filterAsset" type="search" placeholder="Search asset ID, name…" aria-label="Search assets" /><select id="typeFilter" aria-label="Filter by asset type"><option value="all">All types</option><option value="Audio">Audio</option><option value="Animation">Animation</option><option value="Decal">Images / decals</option><option value="Model">Models</option><option value="Manual">Manual only</option></select></div></div>
-          <div class="panel table-panel"><table><thead><tr><th>ASSET / PATH</th><th>TYPE</th><th>REFERENCES</th><th>NEW ID</th><th></th></tr></thead><tbody id="assetTable"></tbody></table><div class="empty-state" id="assetsEmpty"><div>▧</div><strong>No references imported yet</strong><p>Scan your Studio project, then paste the results above.</p></div></div>
+          <div class="panel table-panel"><table><thead><tr><th>ASSET / PATH</th><th>TYPE</th><th>REFERENCES</th><th>NEW ID</th><th></th></tr></thead><tbody id="assetTable"></tbody></table><div class="empty-state" id="assetsEmpty"><div>▧</div><strong>No references imported yet</strong><p>Choose a saved .rbxl place file to scan.</p></div></div>
         </section>
 
         <section class="screen hidden" id="screen-uploads">

@@ -53,6 +53,7 @@ test('serves dashboard but protects upload from unsigned visitors', async () => 
     assert.equal(home.status, 200);
     assert.match(await home.text(), /ALEX — Asset Reuploader/);
     assert.equal((await fetch(`${url}/scan-import.js`)).status, 200);
+    assert.equal((await fetch(`${url}/rbxl-reader.js`)).status, 200);
     const config = await (await fetch(`${url}/api/config`)).json();
     assert.equal(config.groupId, '548271796');
     assert.deepEqual(config.passes.map(x => x.id), ['2037861333','2037927296','2040560797']);
