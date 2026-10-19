@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
+  <Meta name="ExplicitAutoJoints">true</Meta>
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Script" referent="RBX0">
+    <Properties>
+      <bool name="Disabled">false</bool>
+      <string name="Name">ALEX_REUPLOADER_PLUGIN</string>
+      <ProtectedString name="Source"><![CDATA[-- ALEX REUPLOADER • Roblox Studio Plugin
+-- Installs as a LOCAL PLUGIN in Roblox Studio, not as an executor script.
+-- Scans references in your own experience and updates references using
+-- authorized asset IDs returned by the ALEX website.
+
+assert(plugin, "Install this file as a Roblox Studio plugin.")
+
+local Selection = game:GetService("Selection")
+local HttpService = game:GetService("HttpService")
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+
+local GROUP_ID = 548271796
+local toolBar = plugin:CreateToolbar("ALEX REUPLOADER")
+local open = toolBar:CreateButton("ALEX Reuploader", "Inspect and replace asset IDs in your own project", "rbxassetid://4458901886")
+open.ClickableWhenViewportHidden = true
+
+local dockInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 460, 660, 365, 540)
+local widget = plugin:CreateDockWidgetPluginGui("ALEX_Reuploader_V1", dockInfo)
+widget.Title = "ALEX / Asset Reuploader"
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.fromScale(1, 1)
+main.BackgroundColor3 = Color3.fromRGB(15, 17, 26)
+main.BorderSizePixel = 0
+main.Parent = widget
+
+local pad = Instance.new("UIPadding")
+pad.PaddingTop = UDim.new(0, 16)
+pad.PaddingLeft = UDim.new(0, 16)
+pad.PaddingRight = UDim.new(0, 16)
+pad.Parent = main
+
+local list = Instance.new("UIListLayout")
+list.Padding = UDim.new(0, 9)
+list.FillDirection = Enum.FillDirection.Vertical
+list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Parent = main
+
+local function label(text, height, size, color)
+    local out = Instance.new("TextLabel")
+    out.Size = UDim2.new(1, 0, 0, height)
+    out.BackgroundTransparency = 1
+    out.Font = Enum.Font.GothamMedium
+    out.TextSize = size or 12
+    out.TextWrapped = true
+    out.TextXAlignment = Enum.TextXAlignment.Left
+    out.TextColor3 = color or Color3.fromRGB(188, 193, 211)
+    out.Text = text
+    out.Parent = main
+    return out
+end
+
+local function button(text, action)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 35)
+    b.BackgroundColor3 = Color3.fromRGB(92, 61, 165)
+    b.TextColor3 = Color3.fromRGB(250, 246, 255)
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.Text = text
+    b.AutoButtonColor = true
+    b.Parent = main
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = b
+    b.MouseButton1Click:Connect(action)
+    return b
+end
+
+local function editor(placeholder, height)
+    local field = Instance.new("TextBox")
+    field.Size = UDim2.new(1, 0, 0, height)
+    field.BackgroundColor3 = Color3.fromRGB(25, 29, 44)
+    field.TextColor3 = Color3.fromRGB(218, 222, 240)
+    field.PlaceholderColor3 = Color3.fromRGB(118, 128, 151)
+    field.ClearTextOnFocus = false
+    field.Font = Enum.Font.Code
+    field.TextSize = 12
+    field.MultiLine = true
+    field.TextXAlignment = Enum.TextXAlignment.Left
+    field.TextYAlignment = Enum.TextYAlignment.Top
+    field.TextWrapped = false
+    field.PlaceholderText = placeholder
+    field.Text = ""
+    field.Parent = main
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 7)
+    corner.Parent = field
+    return field
+end
+
+label("ALEX / ASSET CONTROL", 27, 20, Color3.fromRGB(219, 190, 255))
+label("GROUP " .. GROUP_ID .. "  •  Studio reference manager", 18, 11)
+label("Select models/folders to scan them. Nothing selected = scan the whole place. Import the resulting JSON into alex-reuploader site.", 45, 12)
+local manifestBox = editor("Your scan results (JSON) will appear here.", 95)
+local feedback = label("Ready. No changes made.", 43, 12, Color3.fromRGB(148, 232, 189))
+
+local PROPERTIES = {
+    Animation = { "AnimationId" },
+    Sound = { "SoundId" },
+    Decal = { "Texture" },
+    Texture = { "Texture" },
+    MeshPart = { "MeshId", "TextureID" },
+    SpecialMesh = { "MeshId", "TextureId" },
+    ImageLabel = { "Image", "HoverImage" },
+    ImageButton = { "Image", "HoverImage", "PressedImage" },
+    ParticleEmitter = { "Texture" },
+    Beam = { "Texture" },
+    Trail = { "Texture" },
+    Sky = { "SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp", "SunTextureId", "MoonTextureId" },
+    Shirt = { "ShirtTemplate" },
+    Pants = { "PantsTemplate" },
+    ShirtGraphic = { "Graphic" },
+    VideoFrame = { "Video" },
+    SurfaceAppearance = { "ColorMap", "MetalnessMap", "NormalMap", "RoughnessMap" },
+}
+
+local function targetInstances()
+    local selected = Selection:Get()
+    local roots = #selected > 0 and selected or { game }
+    local found, seen = {}, {}
+    for _, root in ipairs(roots) do
+        local instances = { root }
+        for _, item in ipairs(root:GetDescendants()) do table.insert(instances, item) end
+        for _, item in ipairs(instances) do
+            if not seen[item] then
+                seen[item] = true
+                table.insert(found, item)
+            end
+        end
+    end
+    return found
+end
+
+local function assetNumber(value)
+    if type(value) ~= "string" then return nil end
+    return value:match("^rbxassetid://(%d+)$")
+        or value:match("[?&]id=(%d+)")
+        or value:match("^(%d+)$")
+end
+
+local function inspect(item, callback)
+    local properties = PROPERTIES[item.ClassName]
+    if not properties then return end
+    for _, key in ipairs(properties) do
+        local okay, value = pcall(function() return item[key] end)
+        if okay then
+            local id = assetNumber(value)
+            if id then callback(item, key, id, value) end
+        end
+    end
+end
+
+button("SCAN ASSET REFERENCES", function()
+    local entries = {}
+    for _, item in ipairs(targetInstances()) do
+        inspect(item, function(_, property, id)
+            table.insert(entries, { path = item:GetFullName(), name = item.Name, className = item.ClassName,
+                property = property, assetId = id })
+        end)
+    end
+    table.sort(entries, function(a, b) return a.path < b.path end)
+    manifestBox.Text = HttpService:JSONEncode({ groupId = GROUP_ID, placeId = game.PlaceId, items = entries })
+    feedback.Text = ("Found %d references. Select JSON and press Ctrl+C to copy."):format(#entries)
+end)
+
+label("After uploading files on the ALEX website, paste its old=new ID map here:", 31, 12)
+local mappingBox = editor("123456789=987654321\n111111111=222222222", 75)
+
+button("APPLY ID MAP TO STUDIO", function()
+    local idMap, n = {}, 0
+    for line in mappingBox.Text:gmatch("[^\r\n]+") do
+        if line:match("%S") then
+            local old, new = line:match("^%s*(%d+)%s*=%s*(%d+)%s*$")
+            if not old or not new then
+                feedback.Text = "Invalid mapping. Use one old_id=new_id per line."
+                return
+            end
+            if idMap[old] and idMap[old] ~= new then
+                feedback.Text = "Conflicting mappings for ID " .. old
+                return
+            end
+            idMap[old], n = new, n + 1
+        end
+    end
+    if n == 0 then feedback.Text = "Paste an ID map from the website first." return end
+
+    local recorder = ChangeHistoryService:TryBeginRecording("ALEX Reuploader map")
+    if not recorder then
+        feedback.Text = "Studio is busy recording another change; retry later."
+        return
+    end
+    local changed, failures = 0, 0
+    for _, item in ipairs(targetInstances()) do
+        inspect(item, function(target, property, oldId)
+            local newId = idMap[oldId]
+            if newId and newId ~= oldId then
+                local okay = pcall(function() target[property] = "rbxassetid://" .. newId end)
+                if okay then changed = changed + 1 else failures = failures + 1 end
+            end
+        end)
+    end
+    ChangeHistoryService:FinishRecording(recorder, Enum.FinishRecordingOperation.Commit)
+    feedback.Text = ("Updated %d references (%d couldn't be edited). Ctrl+Z to undo."):format(changed, failures)
+end)
+
+label("Only reupload files you own or have permission to use. This plugin does not download protected asset content or bypass Roblox permissions.", 55, 11)
+
+open.Click:Connect(function()
+    widget.Enabled = not widget.Enabled
+end)
+
+plugin.Unloading:Connect(function()
+    widget.Enabled = false
+end)
+]]></ProtectedString>
+    </Properties>
+  </Item>
+</roblox>

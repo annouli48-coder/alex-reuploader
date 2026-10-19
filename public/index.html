@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0d0b18" />
+  <meta name="description" content="ALEX Reuploader — inspect Roblox Studio asset references, upload your permitted originals and apply fresh asset IDs." />
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>ALEX — Asset Reuploader</title>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-glyph">A<span>✦</span></span><span class="brand-name">ALEX<span>LABS</span><small>ASSET WORKSPACE</small></span></div>
+      <div class="side-label">WORKSPACE</div>
+      <nav class="nav" aria-label="Navigation">
+        <button data-screen="dashboard" class="nav-item active"><span class="nav-icon">◈</span> Overview <span class="nav-marker"></span></button>
+        <button data-screen="assets" class="nav-item"><span class="nav-icon">▦</span> Asset scanner <span class="nav-count" id="navCount">0</span></button>
+        <button data-screen="uploads" class="nav-item"><span class="nav-icon">↥</span> Reupload queue</button>
+        <button data-screen="plans" class="nav-item"><span class="nav-icon">✧</span> Memberships</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="safety-note"><span>◉</span><div><strong>Creator-first</strong><small>Only upload assets you own or have permission to use.</small></div></div>
+        <div class="side-footer">ALEX REUPLOADER <span>v1.0</span></div>
+      </div>
+    </aside>
+
+    <div class="content-wrap">
+      <header class="topbar">
+        <div class="mobile-brand">ALEX <span>REUPLOADER</span></div>
+        <div class="breadcrumbs"><span>Workspace</span><span class="crumb-arrow">/</span><strong id="pageCrumb">Overview</strong></div>
+        <div class="top-actions"><span class="connection" id="connection"><i></i> Configuration needed</span><div id="authArea"><a href="/auth/start" class="btn btn-small btn-primary" id="loginBtn">Connect Roblox ↗</a></div></div>
+      </header>
+
+      <main>
+        <section class="screen" id="screen-dashboard">
+          <div class="hero">
+            <div class="hero-copy"><div class="eyebrow"><span class="sparkle">✦</span> NEXT-GEN ASSET WORKSPACE <span class="eyebrow-line"></span></div>
+              <h1>Give your assets<br /><em>a fresh identity.</em></h1>
+              <p>Scan your Roblox Studio project, upload the original files you have rights to, and sync new IDs back to your game. One clean workflow.</p>
+              <div class="hero-actions"><button class="btn btn-primary" data-goto="assets">Start scanning <span>↗</span></button><button class="btn btn-outline" data-goto="uploads">Open queue <span>→</span></button></div>
+            </div>
+            <div class="hero-art" aria-hidden="true"><div class="orbit outer"></div><div class="orbit inner"></div><div class="core">A<span>✦</span></div><div class="float-chip chip-one">01 <span>SCAN</span></div><div class="float-chip chip-two">02 <span>UPLOAD</span></div><div class="float-chip chip-three">03 <span>REMAP</span></div></div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card"><span class="stat-icon violet">▦</span><small>DETECTED REFERENCES</small><strong id="statReferences">0</strong><span>Across your Studio selection</span></div>
+            <div class="stat-card"><span class="stat-icon pink">◈</span><small>UNIQUE ASSET IDS</small><strong id="statUnique">0</strong><span>Grouped for faster review</span></div>
+            <div class="stat-card"><span class="stat-icon green">↥</span><small>COMPLETED REMAPS</small><strong id="statRemaps">0</strong><span>Ready to apply in Studio</span></div>
+            <div class="stat-card"><span class="stat-icon blue">✧</span><small>CURRENT TIER</small><strong id="statTier" class="tier-stat">Guest</strong><span id="statAllowance">Sign in to unlock uploads</span></div>
+          </div>
+
+          <div class="two-grid"><article class="panel getting-started"><div class="panel-head"><div><span class="panel-kicker">YOUR WORKFLOW</span><h2>Get started in 3 steps</h2></div><span class="mini-tag">EASY SETUP</span></div>
+              <div class="step"><span class="step-no">01</span><div><strong>Scan references in Roblox Studio</strong><p>Install the ALEX plugin, scan the place or selection, then copy the generated JSON.</p></div><span class="step-arrow">↗</span></div>
+              <div class="step"><span class="step-no">02</span><div><strong>Import &amp; upload original files</strong><p>Paste or import the scan. Choose your owned audio, animation, image, or model files.</p></div><span class="step-arrow">↗</span></div>
+              <div class="step"><span class="step-no">03</span><div><strong>Copy your replacement map</strong><p>After Roblox confirms the upload, copy the map into the plugin and apply changes with Undo support.</p></div><span class="step-arrow">↗</span></div>
+            </article>
+            <article class="panel status-panel"><div class="panel-head"><div><span class="panel-kicker">INTEGRATION</span><h2>Connection status</h2></div></div>
+              <div class="connection-row"><div class="connection-icon">R</div><div><strong>Roblox Open Cloud</strong><small id="oauthStatus">Checking server configuration…</small></div><span class="status-pill" id="oauthPill">CHECKING</span></div>
+              <div class="connection-row"><div class="connection-icon">S</div><div><strong>Studio scanner</strong><small>Import a scan from your plugin</small></div><span class="status-pill muted" id="scannerPill">AWAITING SCAN</span></div>
+              <div class="callout"><span>✳</span><div><strong>Heads up</strong><p>An asset ID is a reference, not the original media file. Roblox only accepts uploads you can legitimately provide.</p></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="screen hidden" id="screen-assets">
+          <div class="screen-heading"><div><span class="page-eyebrow">01 / DISCOVER</span><h1>Asset scanner<span class="heading-dot">.</span></h1><p>Bring in asset references from your Studio project. No manual ID entry.</p></div><button class="btn btn-ghost" id="demoBtn">Load sample scan ↗</button></div>
+          <div class="panel import-panel"><div class="import-icon">↧</div><div class="import-copy"><strong>Drop a scan here, or paste JSON below</strong><p>Use the “SCAN ASSET REFERENCES” button in the ALEX Studio plugin.</p></div><label class="btn btn-outline file-label">Choose JSON file<input type="file" id="manifestFile" accept=".json,application/json" hidden /></label></div>
+          <div class="paste-panel"><textarea id="manifestInput" spellcheck="false" placeholder='{ "groupId": 548271796, "items": [ ... ] }'></textarea><button class="btn btn-primary" id="parseManifest">Import references <span>→</span></button></div>
+          <div class="section-toolbar"><div><span class="panel-kicker">DISCOVERED ASSETS</span><h2>References <span class="count-bubble" id="assetCount">0</span></h2></div><div class="filters"><input id="filterAsset" type="search" placeholder="Search asset ID, name…" aria-label="Search assets" /><select id="typeFilter" aria-label="Filter by asset type"><option value="all">All types</option><option value="Audio">Audio</option><option value="Animation">Animation</option><option value="Decal">Images / decals</option><option value="Model">Models</option><option value="Manual">Manual only</option></select></div></div>
+          <div class="panel table-panel"><table><thead><tr><th>ASSET / PATH</th><th>TYPE</th><th>REFERENCES</th><th>NEW ID</th><th></th></tr></thead><tbody id="assetTable"></tbody></table><div class="empty-state" id="assetsEmpty"><div>▧</div><strong>No references imported yet</strong><p>Scan your Studio project, then paste the results above.</p></div></div>
+        </section>
+
+        <section class="screen hidden" id="screen-uploads">
+          <div class="screen-heading"><div><span class="page-eyebrow">02 / TRANSFORM</span><h1>Reupload queue<span class="heading-dot">.</span></h1><p>Upload authorized original files, then send their new IDs back to Studio.</p></div><button class="btn btn-outline" id="copyMappingTop">Copy ID map <span>⧉</span></button></div>
+          <div class="upload-grid">
+            <article class="panel upload-form"><div class="panel-head"><div><span class="panel-kicker">NEW UPLOAD</span><h2>Prepare an asset</h2></div><span class="mini-tag">OPEN CLOUD</span></div>
+              <form id="uploadForm">
+                <label class="field-label" for="targetAsset">Original asset reference</label><select id="targetAsset" required><option value="">Import a Studio scan first</option></select>
+                <label class="field-label" for="uploadType">Asset category</label><select id="uploadType"><option>Audio</option><option>Animation</option><option>Decal</option><option>Image</option><option>Model</option></select>
+                <label class="field-label" for="displayName">New asset name</label><input type="text" id="displayName" placeholder="My new asset" maxlength="50" required />
+                <label class="dropzone" id="dropzone" for="assetFile"><span class="drop-icon">↑</span><strong id="fileTitle">Click to select an original file</strong><small id="fileSubtitle">Audio, images, Studio animations or model files • max 20MB</small><input type="file" id="assetFile" required /></label>
+                <label class="check-row"><input type="checkbox" id="publishGroup" /><span>Publish to a group instead of my account</span></label>
+                <div id="groupField" class="group-field hidden"><label class="field-label" for="groupId">Group ID (optional destination)</label><input type="text" id="groupId" value="548271796" inputmode="numeric" pattern="[0-9]+" /><small>Roblox verifies whether you have permission to publish to that group.</small></div>
+                <label class="field-label" for="description">Custom description <span class="ultra-only">ULTRA</span></label><textarea id="description" rows="2" placeholder="Available with Ultra membership" disabled></textarea>
+                <label class="check-row permission"><input type="checkbox" id="confirmRights" required /><span>I own this file or have permission to republish it.</span></label>
+                <button class="btn btn-primary btn-wide" type="submit" id="uploadSubmit">Upload to Roblox <span>↗</span></button>
+                <p class="inline-hint" id="uploadFeedback" role="status">Connect Roblox to start reuploading.</p>
+              </form>
+            </article>
+            <div class="queue-side"><article class="panel"><div class="panel-head"><div><span class="panel-kicker">PROGRESS</span><h2>Your new asset IDs</h2></div><span class="count-bubble" id="mappedCount">0</span></div><div class="map-scroll" id="mappingList"><div class="mini-empty">No completed reuploads yet.</div></div><button class="btn btn-outline btn-wide" id="copyMapping">Copy map for Studio <span>⧉</span></button><p class="quiet">Paste this into the plugin’s “APPLY ID MAP TO STUDIO” box.</p></article>
+              <article class="panel tip-panel"><div class="tip-icon">✧</div><div><strong>How replacement works</strong><p>The scanner finds references. Each successful upload returns a new ID; your plugin replaces matching properties in Studio. Original files are never modified.</p></div></article></div>
+          </div>
+        </section>
+
+        <section class="screen hidden" id="screen-plans">
+          <div class="screen-heading"><div><span class="page-eyebrow">03 / ACCESS</span><h1>Choose your power<span class="heading-dot">.</span></h1><p>More workspace upload capacity, backed by verified Roblox game-pass ownership.</p></div></div>
+          <div class="plan-grid">
+            <article class="plan"><div class="plan-icon">◈</div><small>GET STARTED</small><h2>Free</h2><p>For small creator projects.</p><strong>5 <span>app uploads / day</span></strong><ul><li>Unlimited Studio reference scans</li><li>ID map export &amp; apply</li><li>Personal or permitted group uploads</li></ul><button class="btn btn-outline btn-wide" disabled>Included</button></article>
+            <article class="plan"><div class="plan-icon">✧</div><small>GAME PASS 01</small><h2>Creator</h2><p>More room to create.</p><strong>20 <span>app uploads / day</span></strong><ul><li>Everything in Free</li><li>Larger daily upload allowance</li><li>Same Studio mapping workflow</li></ul><a class="btn btn-outline btn-wide" href="https://www.roblox.com/game-pass/2037861333" target="_blank" rel="noopener">View game pass ↗</a></article>
+            <article class="plan popular"><div class="popular-label">POPULAR</div><div class="plan-icon">✦</div><small>GAME PASS 02</small><h2>Pro</h2><p>Made for bigger projects.</p><strong>50 <span>app uploads / day</span></strong><ul><li>Everything in Creator</li><li>Higher daily upload allowance</li><li>Group and personal destinations</li></ul><a class="btn btn-primary btn-wide" href="https://www.roblox.com/game-pass/2037927296" target="_blank" rel="noopener">View game pass ↗</a></article>
+            <article class="plan"><div class="plan-icon">⬡</div><small>GAME PASS 03</small><h2>Ultra</h2><p>Maximum workflow flexibility.</p><strong>100 <span>app uploads / day</span></strong><ul><li>Everything in Pro</li><li>Custom upload descriptions</li><li>Largest app upload allowance</li></ul><a class="btn btn-outline btn-wide" href="https://www.roblox.com/game-pass/2040560797" target="_blank" rel="noopener">View game pass ↗</a></article>
+          </div>
+          <p class="plans-disclaimer">Daily counts are ALEX app limits, not Roblox platform limits. Roblox may enforce lower quotas, moderation, and asset permissions. Game passes never override those rules. Memberships become active only after server-side ownership verification.</p>
+        </section>
+      </main>
+      <footer class="main-footer"><span>© 2026 ALEX LABS — BUILT FOR ROBLOX CREATORS</span><span>Not affiliated with Roblox Corporation.</span></footer>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
