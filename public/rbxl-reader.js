@@ -2,6 +2,8 @@
 // Decodes the instance/property/parent chunks needed to locate asset IDs.
 // The original place is never changed or uploaded.
 
+import { decompress as decompressZstd } from '../node_modules/fzstd/esm/index.mjs';
+
 const SIGNATURE = [0x3c, 0x72, 0x6f, 0x62, 0x6c, 0x6f, 0x78, 0x21, 0x89, 0xff, 0x0d, 0x0a, 0x1a, 0x0a];
 const textDecoder = new TextDecoder('utf-8');
 
@@ -67,6 +69,23 @@ function decompressLz4(source, expected) {
   return dest;
 }
 
+function decompressChunk(source, expected) {
+  // Modern Studio files can mix LZ4 blocks and Zstandard frames in one RBXL.
+  // The first four bytes of a Zstandard frame are its fixed magic number.
+  const isZstd = source.length >= 4
+    && source[0] === 0x28 && source[1] === 0xb5
+    && source[2] === 0x2f && source[3] === 0xfd;
+  if (!isZstd) return decompressLz4(source, expected);
+  if (expected > 64_000_000) throw new Error('An RBXL chunk is too large to process safely.');
+  try {
+    const result = decompressZstd(source, new Uint8Array(expected));
+    if (result.length !== expected) throw new Error('Unexpected decoded size.');
+    return result;
+  } catch {
+    throw new Error('Could not decompress a Zstandard RBXL chunk. The file may be damaged or unsupported.');
+  }
+}
+
 function idFromProperty(value) {
   const text = String(value ?? '').trim();
   const match = text.match(/^rbxassetid:\/\/(\d{1,20})$/i)
@@ -109,7 +128,7 @@ export function scanBinaryPlace(arrayBuffer) {
     reader.take(4);
     if (compressedSize > 80_000_000 || uncompressedSize > 64_000_000) throw new Error('RBXL chunk is too large.');
     const chunkBytes = compressedSize
-      ? decompressLz4(reader.take(compressedSize), uncompressedSize)
+      ? decompressChunk(reader.take(compressedSize), uncompressedSize)
       : reader.take(uncompressedSize);
     if (kind === 'END\0' || kind === 'END.') { sawEnd = true; break; }
     if (kind !== 'INST' && kind !== 'PROP' && kind !== 'PRNT') continue;

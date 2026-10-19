@@ -54,6 +54,11 @@ test('serves dashboard but protects upload from unsigned visitors', async () => 
     assert.match(await home.text(), /ALEX — Asset Reuploader/);
     assert.equal((await fetch(`${url}/scan-import.js`)).status, 200);
     assert.equal((await fetch(`${url}/rbxl-reader.js`)).status, 200);
+    const zstdModule = await fetch(`${url}/node_modules/fzstd/esm/index.mjs`);
+    assert.equal(zstdModule.status, 200);
+    assert.match(zstdModule.headers.get('content-type'), /text\/javascript/);
+    assert.match(await zstdModule.text(), /export function decompress/);
+    assert.equal((await fetch(`${url}/node_modules/fzstd/package.json`)).status, 404);
     const config = await (await fetch(`${url}/api/config`)).json();
     assert.equal(config.groupId, '548271796');
     assert.deepEqual(config.passes.map(x => x.id), ['2037861333','2037927296','2040560797']);

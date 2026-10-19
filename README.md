@@ -5,7 +5,7 @@ Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-f
 ## What works
 
 - The website file picker accepts **only `.rbxl`** Roblox place files (binary format). It reads the file locally in the browser, finds `Sound`, `Animation`, and common `AudioPlayer` asset references, and displays location counts and asset-ID lists. The place file is never uploaded to ALEX.
-- The `.rbxl` parser handles standard compressed (LZ4) and uncompressed chunks. It recognizes clear `SoundId`/`AnimationId` references embedded in scripts and appropriately named value objects where those strings are serialized in the file.
+- The `.rbxl` parser handles modern Zstandard (ZSTD), legacy LZ4, and uncompressed chunks, including mixed-compression files. It recognizes clear `SoundId`/`AnimationId` references embedded in scripts and appropriately named value objects where those strings are serialized in the file.
 - The optional Studio plugin can scan an open project separately, select an existing animation from Roblox's own picker, and apply a copied `old_id=new_id` map with Undo support. It is no longer required for uploading scan data to the website.
 - Sign in with Roblox using **OAuth 2.0 authorization code + PKCE**; app secrets stay on the server.
 - Upload a **file you own or may redistribute** via Roblox's Open Cloud Assets API. Optional group target is checked by Roblox; entering a group ID does not grant upload permission.
@@ -15,10 +15,11 @@ Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-f
 
 ## Run locally
 
-Use Node.js 20 or later. No npm dependencies are required.
+Use Node.js 20 or later. Install the lightweight Zstandard decoding dependency before running:
 
 ```sh
 cd alex-reuploader
+npm install
 npm test
 npm start
 ```

@@ -27,12 +27,14 @@ const lz4LiteralOnly = input => {
   result.push(...input);
   return result;
 };
+// Zstandard-compressed SoundId PROP chunk produced from the fixture content.
+const zstdSoundProperty = Array.from(Buffer.from('KLUv/SAqUQEABwAAAAcAAABTb3VuZElkARYAAAByYnhhc3NldGlkOi8vMTIzNDU2Nzg5', 'base64'));
 const chunk = (name, content, compressed = false) => {
-  const stored = compressed ? lz4LiteralOnly(content) : content;
+  const stored = compressed === 'zstd' ? zstdSoundProperty : compressed ? lz4LiteralOnly(content) : content;
   return [...word(name), ...u32(compressed ? stored.length : 0), ...u32(content.length), ...[0, 0, 0, 0], ...stored];
 };
 
-function samplePlace(compressed = false) {
+function samplePlace(compressed = false, zstdSound = false) {
   const inst = [...u32(7), ...string('Sound'), 0, ...u32(1), ...refArray([1])];
   const name = [...u32(7), ...string('Name'), 1, ...string('Theme')];
   const sound = [...u32(7), ...string('SoundId'), 1, ...string('rbxassetid://123456789')];
@@ -41,7 +43,7 @@ function samplePlace(compressed = false) {
     ...RBXL_SIGNATURE, 0, 0, ...u32(1), ...u32(1), ...new Array(8).fill(0),
     ...chunk('INST', inst, compressed),
     ...chunk('PROP', name, compressed),
-    ...chunk('PROP', sound, compressed),
+    ...chunk('PROP', sound, zstdSound ? 'zstd' : compressed),
     ...chunk('PRNT', prnt, compressed),
     ...chunk('END\0', word('</roblox>')),
   ]);
@@ -60,6 +62,14 @@ test('scans a real binary-format RBXL structure, including names and asset IDs',
 test('decodes LZ4-compressed RBXL chunks', () => {
   const result = scanBinaryPlace(samplePlace(true).buffer);
   assert.equal(result.items[0].assetId, '123456789');
+});
+
+test('decodes modern Zstandard and mixed Zstandard/LZ4 RBXL chunks', () => {
+  for (const lz4 of [false, true]) {
+    const result = scanBinaryPlace(samplePlace(lz4, true).buffer);
+    assert.equal(result.items[0].assetId, '123456789');
+    assert.equal(result.items[0].path, 'Theme');
+  }
 });
 
 test('refuses non-RBXL data and truncated RBXL chunks', () => {

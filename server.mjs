@@ -241,6 +241,11 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         return json(res, 200, { done: output.done === true, assetId: output.done ? String(output.response?.assetId || '') : '', error: String(output.error?.message || (moderationRejected ? 'Roblox moderation rejected the asset.' : '')) });
       }
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
+      if (pathname === '/node_modules/fzstd/esm/index.mjs') {
+        const decoder = await readFile(join(ROOT, 'node_modules', 'fzstd', 'esm', 'index.mjs'));
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=86400', 'x-content-type-options': 'nosniff' });
+        return res.end(decoder);
+      }
       const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/scan-import.js': ['scan-import.js', 'text/javascript'], '/rbxl-reader.js': ['rbxl-reader.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
       const file = files[pathname];
       if (!file) throw new HttpError(404, 'Page not found.');
