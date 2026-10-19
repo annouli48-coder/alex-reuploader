@@ -9,7 +9,7 @@ const OAUTH = 'https://apis.roblox.com/oauth/v1';
 const ASSETS = 'https://apis.roblox.com/assets/v1';
 const PASSES = ['2037861333', '2037927296', '2040560797'];
 const PASS_NAMES = ['Creator', 'Pro', 'Ultra'];
-const OWNER_ID = '9140908042';
+const OWNER_IDS = new Set(['9140908042', '10290256654']);
 const DEFAULT_GROUP = '548271796';
 const MAX_FILE = 20 * 1024 * 1024;
 const MAX_BODY = MAX_FILE + 512 * 1024;
@@ -125,7 +125,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
     return session.access;
   }
   async function checkTier(session) {
-    if (session.userId === OWNER_ID) return 3;
+    if (OWNER_IDS.has(session.userId)) return 3;
     if (session.tierValidUntil > Date.now()) return session.tier;
     let tier = 0;
     // Inventory checks are server-side and fail closed on hidden inventory or upstream errors.
@@ -241,7 +241,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         return json(res, 200, { done: output.done === true, assetId: output.done ? String(output.response?.assetId || '') : '', error: String(output.error?.message || (moderationRejected ? 'Roblox moderation rejected the asset.' : '')) });
       }
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
-      const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+      const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/scan-import.js': ['scan-import.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
       const file = files[pathname];
       if (!file) throw new HttpError(404, 'Page not found.');
       const data = await readFile(join(ROOT, 'public', file[0]));

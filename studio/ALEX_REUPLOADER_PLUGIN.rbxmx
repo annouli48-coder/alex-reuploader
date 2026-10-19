@@ -17,27 +17,33 @@ assert(plugin, "Install this file as a Roblox Studio plugin.")
 local Selection = game:GetService("Selection")
 local HttpService = game:GetService("HttpService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
+local StudioService = game:GetService("StudioService")
 
 local GROUP_ID = 548271796
 local toolBar = plugin:CreateToolbar("ALEX REUPLOADER")
 local open = toolBar:CreateButton("ALEX Reuploader", "Inspect and replace asset IDs in your own project", "rbxassetid://4458901886")
 open.ClickableWhenViewportHidden = true
 
-local dockInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 460, 660, 365, 540)
+local dockInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 480, 780, 365, 500)
 local widget = plugin:CreateDockWidgetPluginGui("ALEX_Reuploader_V1", dockInfo)
 widget.Title = "ALEX / Asset Reuploader"
 
-local main = Instance.new("Frame")
+local main = Instance.new("ScrollingFrame")
 main.Name = "Main"
 main.Size = UDim2.fromScale(1, 1)
 main.BackgroundColor3 = Color3.fromRGB(15, 17, 26)
 main.BorderSizePixel = 0
+main.CanvasSize = UDim2.fromOffset(0, 0)
+main.AutomaticCanvasSize = Enum.AutomaticSize.Y
+main.ScrollingDirection = Enum.ScrollingDirection.Y
+main.ScrollBarThickness = 5
 main.Parent = widget
 
 local pad = Instance.new("UIPadding")
 pad.PaddingTop = UDim.new(0, 16)
 pad.PaddingLeft = UDim.new(0, 16)
 pad.PaddingRight = UDim.new(0, 16)
+pad.PaddingBottom = UDim.new(0, 16)
 pad.Parent = main
 
 local list = Instance.new("UIListLayout")
@@ -102,13 +108,28 @@ end
 
 label("ALEX / ASSET CONTROL", 27, 20, Color3.fromRGB(219, 190, 255))
 label("GROUP " .. GROUP_ID .. "  •  Studio reference manager", 18, 11)
-label("Select models/folders to scan them. Nothing selected = scan the whole place. Import the resulting JSON into alex-reuploader site.", 45, 12)
+label("Select a model/folder, or leave selection empty to scan the whole place. Your scans stay inside Studio until you copy their JSON.", 45, 12)
 local manifestBox = editor("Your scan results (JSON) will appear here.", 95)
 local feedback = label("Ready. No changes made.", 43, 12, Color3.fromRGB(148, 232, 189))
+label("SOURCES / optional extra scans", 20, 12, Color3.fromRGB(219, 190, 255))
+local filterBox = editor("Optional folder path, e.g. ReplicatedStorage.Animations", 33)
+local scanScripts = false
+local scanValues = false
+local scriptToggle
+scriptToggle = button("SCRIPT IDS: OFF (CLICK TO ENABLE)", function()
+    scanScripts = not scanScripts
+    scriptToggle.Text = scanScripts and "SCRIPT IDS: ON (READ ONLY)" or "SCRIPT IDS: OFF (CLICK TO ENABLE)"
+end)
+local valueToggle
+valueToggle = button("VALUE IDS: OFF (CLICK TO ENABLE)", function()
+    scanValues = not scanValues
+    valueToggle.Text = scanValues and "VALUE IDS: ON (READ ONLY)" or "VALUE IDS: OFF (CLICK TO ENABLE)"
+end)
 
 local PROPERTIES = {
     Animation = { "AnimationId" },
     Sound = { "SoundId" },
+    AudioPlayer = { "Asset", "AssetId" },
     Decal = { "Texture" },
     Texture = { "Texture" },
     MeshPart = { "MeshId", "TextureID" },
@@ -162,17 +183,128 @@ local function inspect(item, callback)
     end
 end
 
-button("SCAN ASSET REFERENCES", function()
-    local entries = {}
-    for _, item in ipairs(targetInstances()) do
-        inspect(item, function(_, property, id)
-            table.insert(entries, { path = item:GetFullName(), name = item.Name, className = item.ClassName,
-                property = property, assetId = id })
-        end)
+local function allowedPath(item)
+    local filter = filterBox.Text:match("^%s*(.-)%s*$")
+    if filter == "" then return true end
+    local path = item:GetFullName()
+    return path == filter or path:sub(1, #filter + 1) == filter .. "."
+end
+
+local function inspectScript(item, callback)
+    if not item:IsA("LuaSourceContainer") then return end
+    local okay, source = pcall(function() return item.Source end)
+    if not okay or type(source) ~= "string" then return end
+    local scanned = 0
+    for position, id in source:gmatch("()rbxassetid://(%d+)") do
+        local context = source:sub(math.max(1, position - 80), position - 1):lower()
+        local kind
+        if context:match("soundid%s*=%s*['\"]?$") or context:match("audioplayer%s*=%s*['\"]?$") then
+            kind = "Sound"
+        elseif context:match("animationid%s*=%s*['\"]?$") then
+            kind = "Animation"
+        end
+        if kind then
+            callback(item, "Source (read only)", id, kind, "Script")
+            scanned = scanned + 1
+        end
+        if scanned >= 300 then break end
     end
+end
+
+local function inspectValue(item, callback)
+    if not (item:IsA("StringValue") or item:IsA("IntValue") or item:IsA("NumberValue")) then return end
+    local id = assetNumber(tostring(item.Value))
+    if not id then return end
+    local name = item:GetFullName():lower()
+    local kind = (name:find("sound", 1, true) or name:find("audio", 1, true)) and "Sound"
+        or name:find("anim", 1, true) and "Animation" or nil
+    if kind then callback(item, "Value (read only)", id, kind, "Value") end
+end
+
+local entries = {}
+
+local function displayScan(message)
     table.sort(entries, function(a, b) return a.path < b.path end)
     manifestBox.Text = HttpService:JSONEncode({ groupId = GROUP_ID, placeId = game.PlaceId, items = entries })
-    feedback.Text = ("Found %d references. Select JSON and press Ctrl+C to copy."):format(#entries)
+    feedback.Text = message .. (" %d references available to copy as JSON."):format(#entries)
+end
+
+local function scanReferences(mediaOnly)
+    entries = {}
+    for _, item in ipairs(targetInstances()) do
+        if #entries >= 30000 then break end
+        if not allowedPath(item) then continue end
+        if not mediaOnly or item:IsA("Animation") or item:IsA("Sound") or item:IsA("AudioPlayer") then
+            inspect(item, function(_, property, id)
+                table.insert(entries, { path = item:GetFullName(), name = item.Name, className = item.ClassName,
+                    property = property, assetId = id, source = "Instance" })
+            end)
+        end
+        if scanScripts then
+            inspectScript(item, function(_, property, id, className, source)
+                table.insert(entries, { path = item:GetFullName(), name = item.Name, className = className,
+                    property = property, assetId = id, source = source })
+            end)
+        end
+        if scanValues then
+            inspectValue(item, function(_, property, id, className, source)
+                table.insert(entries, { path = item:GetFullName(), name = item.Name, className = className,
+                    property = property, assetId = id, source = source })
+            end)
+        end
+    end
+    displayScan(mediaOnly and "Media scan complete." or "Full scan complete.")
+end
+
+button("SCAN ALL ASSET REFERENCES", function()
+    scanReferences(false)
+end)
+
+button("SCAN SOUNDS + ANIMATIONS", function()
+    scanReferences(true)
+end)
+
+button("PICK AN ANIMATION FROM MY ASSETS", function()
+    -- Roblox exposes an official picker for animations, but not audio assets.
+    local okay, selectedId = pcall(function()
+        return plugin:PromptForExistingAssetIdAsync("Animation")
+    end)
+    if not okay then
+        feedback.Text = "Studio could not open the animation picker."
+    elseif selectedId and selectedId > 0 then
+        table.insert(entries, { path = "Asset Manager / Selected animation", name = "Selected animation",
+            className = "Animation", property = "AnimationId", assetId = tostring(selectedId) })
+        displayScan("Added your selected animation.")
+    else
+        feedback.Text = "Animation selection canceled."
+    end
+end)
+
+button("IMPORT A SAVED SCAN (.JSON)", function()
+    local okay, file = pcall(function() return StudioService:PromptImportFileAsync({ "json" }) end)
+    if not okay then feedback.Text = "Studio couldn't open that file." return end
+    if not file then feedback.Text = "No JSON file selected." return end
+    if file.Size > 6000000 then feedback.Text = "Scan file is too large (max 6 MB)." return end
+    local decoded, parsed = pcall(function() return HttpService:JSONDecode(file:GetBinaryContents()) end)
+    if not decoded or type(parsed) ~= "table" then feedback.Text = "Invalid JSON scan file." return end
+    local records = parsed.items or parsed
+    if type(records) ~= "table" then feedback.Text = "JSON needs an items list." return end
+    local added = 0
+    for _, item in ipairs(records) do
+        if type(item) == "table" then
+            local className = tostring(item.className or item.assetType or item.type or "")
+            if className == "Audio" then className = "Sound" end
+            if className == "Animation" or className == "Sound" or className == "AudioPlayer" then
+                local id = assetNumber(tostring(item.assetId or item.id or ""))
+                if id and added < 30000 then
+                    table.insert(entries, { path = tostring(item.path or "Imported scan"), name = tostring(item.name or className),
+                        className = className, property = className == "Animation" and "AnimationId" or "SoundId", assetId = id })
+                    added = added + 1
+                end
+            end
+        end
+    end
+    displayScan(("Imported %d media references from file."):format(added))
 end)
 
 label("After uploading files on the ALEX website, paste its old=new ID map here:", 31, 12)
@@ -215,7 +347,7 @@ button("APPLY ID MAP TO STUDIO", function()
     feedback.Text = ("Updated %d references (%d couldn't be edited). Ctrl+Z to undo."):format(changed, failures)
 end)
 
-label("Only reupload files you own or have permission to use. This plugin does not download protected asset content or bypass Roblox permissions.", 55, 11)
+label("Asset Manager doesn't expose a full asset listing to plugins. Use the animation picker, or put sounds in your project and scan them. Files can also be imported on the website. No protected media is downloaded.", 78, 11)
 
 open.Click:Connect(function()
     widget.Enabled = not widget.Enabled

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createApp, mediaType, validateId } from '../server.mjs';
+import { parseImport, normalizeReferenceId, extractMediaReferencesFromScript } from '../public/scan-import.js';
 
 test('validates Roblox asset IDs and extension/type combinations', () => {
   assert.equal(validateId('123456789'), '123456789');
@@ -11,6 +12,31 @@ test('validates Roblox asset IDs and extension/type combinations', () => {
   assert.equal(mediaType('Animation', 'dance.rbxmx'), 'model/x-rbxm');
   assert.equal(mediaType('Audio', 'dance.rbxmx'), null);
   assert.equal(mediaType('Mesh', 'file.fbx'), null);
+});
+
+test('reads JSON and CSV audio/animation manifests without media downloads', () => {
+  const json = parseImport(JSON.stringify({ items: [{ className: 'Sound', assetId: 'rbxassetid://12345' }] }), 'scan.json');
+  assert.equal(normalizeReferenceId(json.items[0].assetId), '12345');
+  const csv = parseImport('type,name,assetId\nAnimation,"Run, Fast",987654\nAudio,Theme,rbxassetid://43210', 'assets.csv');
+  assert.equal(csv.items.length, 2);
+  assert.deepEqual(csv.items.map(x => [x.className, x.name, x.assetId]), [
+    ['Animation', 'Run, Fast', '987654'], ['Audio', 'Theme', '43210'],
+  ]);
+  assert.throws(() => parseImport('name,url\nSound,123', 'scan.csv'), /assetId and type/);
+  assert.throws(() => parseImport('not json', 'scan.txt'), /Use Studio JSON/);
+});
+
+test('only extracts context-identified sound and animation IDs from scripts', () => {
+  const refs = extractMediaReferencesFromScript(`
+    someSound.SoundId = "rbxassetid://123456"
+    run.AnimationId = 'https://www.roblox.com/asset/?id=987654'
+    local unrelated = 333333
+    print("rbxassetid://777777")
+  `);
+  assert.deepEqual(refs, [
+    { className: 'Sound', assetId: '123456' },
+    { className: 'Animation', assetId: '987654' },
+  ]);
 });
 
 async function withApp(fn, fetcher = async () => { throw new Error('Unexpected outbound request'); }) {
@@ -26,6 +52,7 @@ test('serves dashboard but protects upload from unsigned visitors', async () => 
     const home = await fetch(url);
     assert.equal(home.status, 200);
     assert.match(await home.text(), /ALEX — Asset Reuploader/);
+    assert.equal((await fetch(`${url}/scan-import.js`)).status, 200);
     const config = await (await fetch(`${url}/api/config`)).json();
     assert.equal(config.groupId, '548271796');
     assert.deepEqual(config.passes.map(x => x.id), ['2037861333','2037927296','2040560797']);
@@ -87,5 +114,26 @@ test('OAuth login, original file upload, operation status and CSRF protection', 
     const result = await (await fetch(`${url}/api/operations/operation_123`, { headers: { cookie: sidCookie } })).json();
     assert.equal(result.assetId, '987654321');
     assert.equal(calls.filter(x => x.url.endsWith('/assets/v1/assets')).length, 1);
+  }, mock);
+});
+
+test('second owner account receives Ultra without a game pass', async () => {
+  const mock = async url => {
+    if (url.endsWith('/token')) return new Response(JSON.stringify({ access_token: 'second-owner-token', expires_in: 900 }), { status: 200 });
+    if (url.endsWith('/userinfo')) return new Response(JSON.stringify({ sub: '10290256654', preferred_username: 'SecondOwner' }), { status: 200 });
+    throw new Error(`Unexpected external request: ${url}`);
+  };
+  await withApp(async url => {
+    const start = await fetch(`${url}/auth/start`, { redirect: 'manual' });
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const flowCookie = start.headers.get('set-cookie').split(';')[0];
+    const callback = await fetch(`${url}/auth/callback?code=code&state=${state}`, { redirect: 'manual', headers: { cookie: flowCookie } });
+    assert.equal(callback.status, 302);
+    const cookie = callback.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    const me = await (await fetch(`${url}/api/me`, { headers: { cookie } })).json();
+    assert.equal(me.user.id, '10290256654');
+    assert.equal(me.plan, 'Ultra');
+    assert.equal(me.tier, 3);
+    assert.equal(me.allowance.limit, 100);
   }, mock);
 });

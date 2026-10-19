@@ -4,12 +4,14 @@ Creator-authorized Roblox asset reupload workspace with a Studio plugin and a Ra
 
 ## What works
 
-- Studio plugin scans all asset references in the current selection, or the whole place when nothing is selected. It groups by old ID on the dashboard.
-- Import exported JSON and review sounds, animations, decals, images, and other references without typing IDs manually.
+- Studio plugin scans all asset references, or only sounds and animations (including modern `AudioPlayer` references), in the current selection or the entire open place. The website groups by old ID and displays service-level location counts, audio/animation counts, and read-only script/value reference counts.
+- Like the scanning options demonstrated in Harmless Asset Manager, the plugin includes optional **SCRIPT IDS** and **VALUE IDS** source switches, as well as a path filter (e.g., `ReplicatedStorage.Animations`). These source scans only extract clearly associated sound/animation IDs, not arbitrary numbers or script contents.
+- Use the Studio animation asset picker to select existing animations not currently placed in the game, and import saved `.json` scans from inside the plugin.
+- Import `.json`, `.csv`, `.rbxmx` (Roblox XML model) or `.rbxlx` (Roblox XML place) files on the website. XML imports extract Sound/AudioPlayer/Animation references directly in the browser without uploading the scan file to the server. CSV needs `assetId,type` columns.
 - Sign in with Roblox using **OAuth 2.0 authorization code + PKCE**; app secrets stay on the server.
 - Upload a **file you own or may redistribute** via Roblox's Open Cloud Assets API. Optional group target is checked by Roblox; entering a group ID does not grant upload permission.
 - Poll Roblox's asset operation to obtain a new asset ID; export `old_id=new_id` mapping to the Studio plugin for editing, with Studio Undo support.
-- Verify the configured Roblox gamepasses server-side. Owner account `9140908042` receives Ultra; other users receive their highest verified pass. Ultra adds custom asset descriptions.
+- Verify the configured Roblox gamepasses server-side. Owner accounts `9140908042` and `10290256654` receive Ultra; other users receive their highest verified pass. Ultra adds custom asset descriptions.
 - Browser keeps the scan and successful mappings locally (no source media stored by the app). Media is sent to Roblox on upload.
 
 ## Run locally
@@ -48,11 +50,12 @@ The included `studio/ALEX_REUPLOADER_PLUGIN.rbxmx` is a **Studio plugin**, not a
 
 1. Import the plugin into Roblox Studio as a local plugin.
 2. Open the toolbar's **ALEX Reuploader** panel.
-3. Click **SCAN ASSET REFERENCES**. Select model(s) first to limit the scan, or scan the whole place.
-4. Copy all the JSON and paste into **Asset scanner** on the website. Duplicate references are grouped by ID.
-5. For each supported asset, use **Upload ↗**, select its own original file, and publish. You must have rights to that file.
-6. Copy the resulting `old_id=new_id` map from **Reupload queue** and paste it into the plugin's second text box.
-7. Click **APPLY ID MAP TO STUDIO**. Use Ctrl+Z in Studio to undo if needed.
+3. Click **SCAN SOUNDS + ANIMATIONS** to find media references, or **SCAN ALL ASSET REFERENCES** for every supported asset property. Select model(s) first to limit the scan; leaving nothing selected scans the whole place. Enable the **SCRIPT IDS** or **VALUE IDS** switches to include recognizable IDs in script assignments or numeric/string values. You may optionally enter a path such as `ReplicatedStorage.Animations`.
+4. To add an animation from your own Roblox inventory that is not used in your place, click **PICK AN ANIMATION FROM MY ASSETS**. For a previously saved Studio scan, use **IMPORT A SAVED SCAN (.JSON)**. Studio's public plugin picker currently supports animations only, not an exhaustive Asset Manager inventory of sounds.
+5. Copy the JSON into the website's **Asset scanner**, or upload a `.json`, `.csv`, `.rbxmx` or `.rbxlx` scan file there. The website shows sound/animation counts, unique IDs, and where it found them. `.rbxmx`/`.rbxlx` XML files scan recognizable script and value references as well as instance properties. Binary `.rbxm` and `.rbxl` files must be opened in Studio and scanned with the plugin or re-exported as XML; they cannot be directly imported into this website. The plugin cannot list every sound shown in Studio's Asset Manager.
+6. For each supported asset, use **Upload ↗**, select its own original file, and publish. You must have rights to that file.
+7. Copy the resulting `old_id=new_id` map from **Reupload queue** and paste it into the plugin's second text box.
+8. Click **APPLY ID MAP TO STUDIO**. Use Ctrl+Z in Studio to undo if needed.
 
 ## Gamepasses & usage
 
@@ -72,7 +75,7 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 - Audio must meet Roblox's duration and upload quota limits; maximum media file size here is 20 MB.
 - A successful API request may return a processing operation. Wait for the new asset ID, then paste the map. Do not retry immediately if polling times out; verify on Creator Dashboard to avoid duplicates.
 - Signed-in sessions, rate counts, and OAuth state live in one process's memory. Deploy as **one Railway replica** for this version. Restarting the service logs users out and resets app counters. Before a full public launch, replace these with persistent server-side storage, and add account-specific throttles and abuse controls.
-- The plugin scans property-based `rbxassetid://...` or URL IDs it can access in Studio. It doesn't read `ServerStorage`/`ServerScriptService` from other people's running games, and it doesn't parse arbitrary IDs from scripts.
+- The plugin scans property-based `rbxassetid://...` or URL IDs it can access in the open Studio project. It doesn't read `ServerStorage`/`ServerScriptService` from other people's running games, doesn't enumerate Roblox's private Asset Manager database, and doesn't parse arbitrary IDs from scripts. The **scan and animation picker are read-only**; only **APPLY ID MAP** edits your open project.
 - Upload descriptions are intentionally disabled unless Ultra entitlement is server-verified.
 
 ## Official documentation
@@ -80,5 +83,7 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 - [Roblox Open Cloud Asset API usage guide](https://create.roblox.com/docs/cloud/guides/usage-assets)
 - [Roblox OAuth implementation](https://create.roblox.com/docs/cloud/auth/oauth2-develop)
 - [Roblox OAuth reference](https://create.roblox.com/docs/cloud/auth/oauth2-reference)
+- [Roblox Studio plugin asset picker (Animation only)](https://create.roblox.com/docs/reference/engine/classes/Plugin/PromptForExistingAssetIdAsync)
+- [Roblox Studio file import](https://create.roblox.com/docs/reference/engine/classes/StudioService/PromptImportFileAsync)
 
 Roblox is a registered trademark of Roblox Corporation. ALEX Reuploader is an independent tool.

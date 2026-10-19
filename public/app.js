@@ -1,6 +1,8 @@
+import { parseImport, normalizeReferenceId } from './scan-import.js';
+
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
-const state = { items: [], mapping: {}, scanCount: 0, user: null, config: null };
+const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null };
 
 function loadSaved() {
   try {
@@ -10,42 +12,57 @@ function loadSaved() {
       for (const [oldId, newId] of Object.entries(data.mapping)) if (/^\d+$/.test(oldId) && /^\d+$/.test(String(newId))) state.mapping[oldId] = String(newId);
     }
     state.scanCount = Number(data.scanCount) || 0;
+    if (data.insights && typeof data.insights === 'object') state.insights = data.insights;
   } catch { /* Browser storage may be empty or inaccessible. */ }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ items: state.items, mapping: state.mapping, scanCount: state.scanCount })); } catch { toast('Could not save to this browser. Export your map now.'); }
+  try { localStorage.setItem(STORE, JSON.stringify({ items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights })); } catch { toast('Could not save to this browser. Export your map now.'); }
 }
 function toast(message) {
   const target = $('toast'); target.textContent = message; target.classList.add('visible');
   clearTimeout(toast.timeout); toast.timeout = setTimeout(() => target.classList.remove('visible'), 4800);
 }
 function typeOf(item) {
-  if (item.className === 'Animation') return 'Animation';
-  if (item.className === 'Sound') return 'Audio';
+  const kind = String(item.className || item.assetType || item.type || '').toLowerCase();
+  if (kind === 'animation') return 'Animation';
+  if (kind === 'sound' || kind === 'audio' || kind === 'audioplayer') return 'Audio';
   if (['MeshPart', 'SpecialMesh'].includes(item.className) && /mesh/i.test(item.property)) return 'Manual';
   if (['MeshPart', 'SpecialMesh'].includes(item.className)) return 'Decal';
   if (item.className === 'VideoFrame') return 'Manual';
   if (item.className === 'SurfaceAppearance' || /image/i.test(item.className)) return 'Image';
   return 'Decal';
 }
-function parseScan(raw) {
-  let doc;
-  try { doc = JSON.parse(raw); } catch { throw new Error('That is not valid JSON. Copy the entire scan from Studio.'); }
-  if (!doc || !Array.isArray(doc.items)) throw new Error('This is not a Studio scan. Expected an "items" array.');
+function parseScan(raw, filename = '') {
+  const doc = parseImport(raw, filename);
+  if (!doc || !Array.isArray(doc.items)) throw new Error('Expected a scan with an "items" array.');
   if (doc.items.length > 30000) throw new Error('Scan is too large (maximum 30,000 references). Select a smaller section in Studio.');
   const byId = new Map();
+  const byLocation = new Map();
+  const insights = { audio: 0, animation: 0, scripts: 0, values: 0, locations: [] };
   for (const rawItem of doc.items) {
-    if (!rawItem || !/^\d{1,20}$/.test(String(rawItem.assetId ?? ''))) continue;
-    const id = String(rawItem.assetId);
+    if (!rawItem) continue;
+    const id = normalizeReferenceId(rawItem.assetId ?? rawItem.id ?? rawItem.asset_id);
+    if (!id || id === '0') continue;
     const name = String(rawItem.name || 'Unnamed asset').slice(0, 150);
     const path = String(rawItem.path || name).slice(0, 500);
     const type = typeOf(rawItem);
+    if (type === 'Audio') insights.audio++;
+    if (type === 'Animation') insights.animation++;
+    if (rawItem.source === 'Script' || String(rawItem.property).includes('Source (read only)')) insights.scripts++;
+    if (rawItem.source === 'Value' || String(rawItem.property).includes('Value (read only)')) insights.values++;
+    const parts = path.split(/[./]/).map(x => x.trim()).filter(Boolean).slice(0, 5);
+    for (let i = 1; i <= parts.length; i++) {
+      const location = parts.slice(0, i).join('.');
+      if (!byLocation.has(location) && byLocation.size >= 350) break;
+      byLocation.set(location, (byLocation.get(location) || 0) + 1);
+    }
     if (!byId.has(id)) byId.set(id, { id, name, path, type, refs: 0 });
     byId.get(id).refs++;
     if (byId.get(id).type === 'Manual' && type !== 'Manual') byId.get(id).type = type;
   }
   if (doc.items.length && byId.size === 0) throw new Error('The scan has no valid Roblox asset IDs.');
-  state.items = [...byId.values()]; state.scanCount = doc.items.length;
+  insights.locations = [...byLocation.entries()].sort((a, b) => b[1] - a[1]).slice(0, 350);
+  state.items = [...byId.values()]; state.scanCount = doc.items.length; state.insights = insights;
   if (doc.groupId && /^\d+$/.test(String(doc.groupId))) $('groupId').value = String(doc.groupId);
   save(); render();
   return `Imported ${state.scanCount} references across ${state.items.length} unique IDs.`;
@@ -95,6 +112,44 @@ function renderQueue() {
     const row = node('div', 'map-row'); row.append(node('span', 'from', oldId), node('span', '', '→'), node('span', 'to', newId)); list.append(row);
   }
 }
+function renderInsights() {
+  const insights = state.insights;
+  $('insightsPanel').classList.toggle('hidden', !insights || !state.scanCount);
+  if (!insights) return;
+  $('animationReferences').textContent = String(insights.animation || 0);
+  $('soundReferences').textContent = String(insights.audio || 0);
+  $('scriptReferences').textContent = String(insights.scripts || 0);
+  $('valueReferences').textContent = String(insights.values || 0);
+  const container = $('locationList'); container.replaceChildren();
+  const tree = { children: new Map(), count: 0 };
+  for (const [path, count] of insights.locations || []) {
+    let branch = tree;
+    for (const name of path.split('.')) {
+      if (!branch.children.has(name)) branch.children.set(name, { name, count: 0, children: new Map() });
+      branch = branch.children.get(name);
+    }
+    branch.count = count;
+  }
+  function showBranch(branch, target, depth) {
+    const children = [...branch.children.values()].sort((a, b) => b.count - a.count);
+    for (const child of children) {
+      if (child.children.size) {
+        const details = node('details', 'location-branch');
+        if (depth === 0) details.open = true;
+        const summary = node('summary', 'location-row');
+        summary.append(node('span', '', child.name), node('strong', '', String(child.count)));
+        details.append(summary);
+        const nested = node('div', 'location-children'); details.append(nested);
+        target.append(details); showBranch(child, nested, depth + 1);
+      } else {
+        const row = node('div', 'location-row location-leaf');
+        row.append(node('span', '', child.name), node('strong', '', String(child.count)));
+        target.append(row);
+      }
+    }
+  }
+  showBranch(tree, container, 0);
+}
 function render() {
   $('navCount').textContent = String(state.items.length);
   $('statReferences').textContent = String(state.scanCount);
@@ -110,7 +165,7 @@ function render() {
     const opt = node('option', '', `${item.name} • ${item.id}`); opt.value = item.id; $('targetAsset').append(opt);
   }
   if (state.items.some(x => x.id === selection && x.type !== 'Manual')) $('targetAsset').value = selection;
-  renderAssets(); renderQueue();
+  renderAssets(); renderQueue(); renderInsights();
 }
 function renderAuth() {
   const me = state.user;
@@ -203,8 +258,9 @@ document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click'
 $('parseManifest').addEventListener('click', () => { try { toast(parseScan($('manifestInput').value)); } catch (e) { toast(e.message); } });
 $('manifestFile').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
-  if (file.size > 6_000_000) return toast('JSON scan is too large. Select fewer items in Studio.');
-  try { const input = await file.text(); $('manifestInput').value = input; toast(parseScan(input)); } catch (e) { toast(e.message); }
+  if (file.size > 6_000_000) return toast('Scan is over 6 MB. Export a smaller selection.');
+  try { const input = await file.text(); $('manifestInput').value = input; toast(parseScan(input, file.name)); } catch (e) { toast(e.message); }
+  finally { event.target.value = ''; }
 });
 $('demoBtn').addEventListener('click', () => {
   const demo = { groupId: 548271796, items: [
