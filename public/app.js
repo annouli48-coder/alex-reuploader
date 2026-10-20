@@ -3,7 +3,7 @@ import { scanBinaryPlace, rewriteBinaryPlace } from './rbxl-reader.js';
 
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
-const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false };
+const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false, stopRequested: false };
 
 function loadSaved() {
   try {
@@ -30,18 +30,20 @@ function typeOf(item) {
   const kind = String(item.className || item.assetType || item.type || '').toLowerCase();
   if (kind === 'animation') return 'Animation';
   if (kind === 'sound' || kind === 'audio' || kind === 'audioplayer') return 'Audio';
-  if (['MeshPart', 'SpecialMesh'].includes(item.className) && /mesh/i.test(item.property)) return 'Manual';
-  if (['MeshPart', 'SpecialMesh'].includes(item.className)) return 'Decal';
-  if (item.className === 'VideoFrame') return 'Manual';
+  if (['MeshPart', 'SpecialMesh'].includes(item.className) && /mesh/i.test(item.property)) return 'Mesh';
+  if (['MeshPart', 'SpecialMesh'].includes(item.className)) return 'Image';
+  if (item.className === 'VideoFrame') return 'Video';
   if (item.className === 'SurfaceAppearance' || /image/i.test(item.className)) return 'Image';
-  return 'Decal';
+  if (item.className === 'UnknownAsset') return 'Unknown';
+  if (item.className === 'Decal' || /Texture|Map|Skybox|Graphic|Face/i.test(item.property)) return 'Image';
+  return 'Unknown';
 }
 function parseScan(doc) {
   if (!doc || !Array.isArray(doc.items)) throw new Error('Expected a scan with an "items" array.');
   if (doc.items.length > 30000) throw new Error('Scan is too large (maximum 30,000 references). Select a smaller section in Studio.');
   const byId = new Map();
   const byLocation = new Map();
-  const insights = { audio: 0, animation: 0, scripts: 0, values: 0, locations: [] };
+  const insights = { audio: 0, animation: 0, other: 0, scripts: 0, values: 0, locations: [] };
   for (const rawItem of doc.items) {
     if (!rawItem) continue;
     const id = normalizeReferenceId(rawItem.assetId ?? rawItem.id ?? rawItem.asset_id);
@@ -51,6 +53,7 @@ function parseScan(doc) {
     const type = typeOf(rawItem);
     if (type === 'Audio') insights.audio++;
     if (type === 'Animation') insights.animation++;
+    if (type !== 'Audio' && type !== 'Animation') insights.other++;
     if (rawItem.source === 'Script' || String(rawItem.property).includes('Source (read only)')) insights.scripts++;
     if (rawItem.source === 'Value' || String(rawItem.property).includes('Value (read only)')) insights.values++;
     const parts = path.split(/[./]/).map(x => x.trim()).filter(Boolean).slice(0, 5);
@@ -61,7 +64,7 @@ function parseScan(doc) {
     }
     if (!byId.has(id)) byId.set(id, { id, name, path, type, refs: 0 });
     byId.get(id).refs++;
-    if (byId.get(id).type === 'Manual' && type !== 'Manual') byId.get(id).type = type;
+    if (byId.get(id).type === 'Unknown' && type !== 'Unknown') byId.get(id).type = type;
   }
   if (doc.items.length && byId.size === 0) throw new Error('The scan has no valid Roblox asset IDs.');
   insights.locations = [...byLocation.entries()].sort((a, b) => b[1] - a[1]).slice(0, 350);
@@ -95,7 +98,7 @@ function renderAssets() {
     const refs = node('td', '', String(item.refs));
     const newId = node('td'); const mapped = state.mapping[item.id]; newId.append(node('code', '', mapped || '—'));
     const actions = node('td');
-    actions.append(node('span', 'quiet', mapped ? 'Ready' : item.type === 'Manual' ? 'Skipped' : 'Check ownership'));
+    actions.append(node('span', 'quiet', mapped ? 'Ready' : 'Check ownership'));
     tr.append(name, kind, refs, newId, actions); tbody.append(tr);
   }
 }
@@ -114,6 +117,7 @@ function renderInsights() {
   if (!insights) return;
   $('animationReferences').textContent = String(insights.animation || 0);
   $('soundReferences').textContent = String(insights.audio || 0);
+  $('otherReferences').textContent = String(insights.other || 0);
   $('scriptReferences').textContent = String(insights.scripts || 0);
   $('valueReferences').textContent = String(insights.values || 0);
   const container = $('locationList'); container.replaceChildren();
@@ -212,20 +216,26 @@ function downloadFixedPlace() {
 async function autoReuploadScanned() {
   if (state.autoBusy) return;
   if (!state.user?.loggedIn) return toast('Sign in with Roblox before enabling automatic reuploads.');
-  const eligible = state.items.filter(item => (item.type === 'Audio' || item.type === 'Animation') && !state.mapping[item.id]);
-  if (!eligible.length) return toast('There are no new audio or animation references to reupload.');
+  const eligible = state.items.filter(item => !state.mapping[item.id]);
+  if (!eligible.length) return toast('There are no new asset references to reupload.');
   const progress = $('autoProgress');
   state.autoBusy = true;
+  state.stopRequested = false;
   $('manifestFile').disabled = true;
+  $('stopAuto').classList.remove('hidden');
   let completed = 0, skipped = 0;
   try {
     for (const [index, item] of eligible.entries()) {
+      if (state.stopRequested) {
+        skipped += eligible.length - index;
+        break;
+      }
       progress.textContent = `Processing ${index + 1}/${eligible.length}: ${item.name} (${item.id})…`;
       try {
         const accepted = await api('/api/auto-reupload', {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-alex-csrf': state.user.csrf },
-          body: JSON.stringify({ oldId: item.id, assetType: item.type, displayName: item.name, rightsConfirmed: true,
+          body: JSON.stringify({ oldId: item.id, assetType: 'Auto', displayName: item.name, rightsConfirmed: true,
             groupId: $('publishGroup').checked ? $('groupId').value.trim() : '', description: $('description').value.trim() }),
         });
         const newId = await pollOperation(accepted.operation);
@@ -234,12 +244,17 @@ async function autoReuploadScanned() {
       } catch (error) {
         skipped++;
         progress.textContent = `Skipped ${item.id}: ${error.message}`;
+        if (/daily .*allowance|rate limit/i.test(error.message)) {
+          skipped += eligible.length - index - 1;
+          progress.textContent = `Stopped at daily allowance: ${completed} reuploaded, ${skipped} left unchanged.`;
+          break;
+        }
       }
     }
-    progress.textContent = `Finished: ${completed} reuploaded, ${skipped} skipped. Only verified eligible assets were changed.`;
+    progress.textContent = `${state.stopRequested ? 'Stopped' : 'Finished'}: ${completed} reuploaded, ${skipped} unchanged. Only authorized source files were reuploaded.`;
     if (completed) downloadFixedPlace();
     try { state.user = await api('/api/me'); renderAuth(); } catch { /* Upload results remain available. */ }
-  } finally { state.autoBusy = false; $('manifestFile').disabled = false; }
+  } finally { state.autoBusy = false; $('manifestFile').disabled = false; $('stopAuto').classList.add('hidden'); }
 }
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function pollOperation(operation) {
@@ -279,6 +294,7 @@ $('manifestFile').addEventListener('change', async event => {
 });
 $('filterAsset').addEventListener('input', renderAssets); $('typeFilter').addEventListener('change', renderAssets);
 $('publishGroup').addEventListener('change', () => $('groupField').classList.toggle('hidden', !$('publishGroup').checked));
+$('stopAuto').addEventListener('click', () => { state.stopRequested = true; $('autoProgress').textContent = 'Stopping after the current asset request…'; });
 $('copyMapping').addEventListener('click', downloadFixedPlace); $('copyMappingTop').addEventListener('click', downloadFixedPlace); $('downloadFixed').addEventListener('click', downloadFixedPlace);
 
 loadSaved(); render();

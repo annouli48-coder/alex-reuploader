@@ -111,6 +111,7 @@ async function limitedAssetBytes(response) {
 }
 
 function recognizedAssetFile(type, bytes) {
+  const leading = bytes.subarray(0, 32).toString('ascii');
   if (type === 'Audio') {
     if (bytes.subarray(0, 4).toString('ascii') === 'OggS') return ['source.ogg', 'audio/ogg'];
     if (bytes.subarray(0, 3).toString('ascii') === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return ['source.mp3', 'audio/mpeg'];
@@ -121,7 +122,33 @@ function recognizedAssetFile(type, bytes) {
     if (bytes.subarray(0, 8).toString('ascii') === '<roblox!') return ['source.rbxm', 'model/x-rbxm'];
     if (bytes.subarray(0, 200).toString('utf8').match(/^\s*(?:<\?xml[^>]*>\s*)?<roblox\b/)) return ['source.rbxmx', 'model/x-rbxm'];
   }
+  if (type === 'Image' || type === 'Decal') {
+    if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return ['source.png', 'image/png'];
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return ['source.jpeg', 'image/jpeg'];
+    if (leading.startsWith('BM')) return ['source.bmp', 'image/bmp'];
+    if (bytes.length >= 18 && [2, 3, 10, 11].includes(bytes[2]) && [8, 16, 24, 32].includes(bytes[16])) return ['source.tga', 'image/tga'];
+  }
+  if (type === 'Mesh' && /^version [1-9]\.[0-9]{2}/.test(leading)) return ['source.mesh', 'model/x-file-mesh-data'];
+  if (type === 'Model') {
+    if (leading.startsWith('<roblox!')) return ['source.rbxm', 'model/x-rbxm'];
+    if (bytes.subarray(0, 200).toString('utf8').match(/^\s*(?:<\?xml[^>]*>\s*)?<roblox\b/)) return ['source.rbxmx', 'model/x-rbxm'];
+    if (leading.startsWith('Kaydara FBX Binary') || /^\s*; FBX/.test(leading)) return ['source.fbx', 'model/fbx'];
+    if (leading.startsWith('glTF')) return ['source.glb', 'model/gltf-binary'];
+    if (bytes[0] === 123) {
+      try { if (JSON.parse(bytes.toString('utf8')).asset?.version) return ['source.gltf', 'model/gltf+json']; }
+      catch { /* Not glTF JSON. */ }
+    }
+  }
+  if (type === 'Video' && bytes.subarray(4, 8).toString('ascii') === 'ftyp') {
+    return bytes.subarray(8, 12).toString('ascii') === 'qt  ' ? ['source.mov', 'video/mov'] : ['source.mp4', 'video/mp4'];
+  }
   throw new HttpError(422, 'Roblox returned asset content in a format this reuploader cannot safely upload.');
+}
+
+const AUTO_TYPES = new Set(['Audio', 'Animation', 'Image', 'Decal', 'Mesh', 'Model', 'Video']);
+function normalizedAssetType(value) {
+  const cleaned = String(value || '').replace(/^ASSET_TYPE_/i, '').toLowerCase();
+  return [...AUTO_TYPES].find(type => type.toLowerCase() === cleaned) || null;
 }
 
 function trustedDownloadUrl(url) {
@@ -250,10 +277,10 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
       if (pathname === '/api/auto-reupload' && req.method === 'POST') {
         const session = checkOrigin(req);
         const options = await smallJsonBody(req);
-        if (options.rightsConfirmed !== true) throw new HttpError(403, 'Confirm you own or have explicit rights to republish these assets.');
+        if (!options || typeof options !== 'object' || options.rightsConfirmed !== true) throw new HttpError(403, 'Confirm you own or have explicit rights to republish these assets.');
         const oldId = validateId(options.oldId);
         const assetType = String(options.assetType || '');
-        if (assetType !== 'Audio' && assetType !== 'Animation') throw new HttpError(400, 'Automatic mode supports audio and animations only.');
+        if (assetType !== 'Auto' && !AUTO_TYPES.has(assetType)) throw new HttpError(400, 'Unsupported automatic asset category.');
         const groupId = String(options.groupId || '').trim();
         const creator = groupId ? { groupId: validateId(groupId) } : { userId: session.userId };
         const name = String(options.displayName || `${assetType} ${oldId}`).trim().slice(0, 50);
@@ -273,11 +300,15 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const metadataResponse = await fetcher(`${ASSETS}/assets/${oldId}`, { headers: bearer, redirect: 'manual' });
         if (!metadataResponse.ok) throw new HttpError(403, 'Roblox did not authorize reading this source asset.');
         const metadata = await remoteJson(metadataResponse);
-        if (String(metadata.creationContext?.creator?.userId || '') !== session.userId) {
-          throw new HttpError(403, 'Automatic mode only reuploads assets owned by the signed-in Roblox user.');
+        const sourceOwner = metadata.creationContext?.creator || {};
+        const ownedByAccount = String(sourceOwner.userId || '') === session.userId;
+        const ownedByDestinationGroup = groupId && String(sourceOwner.groupId || '') === groupId;
+        if (!ownedByAccount && !ownedByDestinationGroup) {
+          throw new HttpError(403, 'The source asset is not owned by your account or the chosen destination group.');
         }
-        const declaredType = String(metadata.assetType || '').toUpperCase();
-        if (declaredType && declaredType !== assetType.toUpperCase() && declaredType !== `ASSET_TYPE_${assetType.toUpperCase()}`) {
+        const verifiedType = normalizedAssetType(metadata.assetType);
+        if (!verifiedType) throw new HttpError(422, 'This source asset category cannot be reuploaded with the supported Roblox Assets API.');
+        if (assetType !== 'Auto' && assetType !== verifiedType) {
           throw new HttpError(422, 'Roblox asset type does not match the file reference.');
         }
 
@@ -295,9 +326,9 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         }
         const media = await limitedAssetBytes(content);
         if (!media.length) throw new HttpError(422, 'The original asset data was empty.');
-        const [fileName, mime] = recognizedAssetFile(assetType, media);
+        const [fileName, mime] = recognizedAssetFile(verifiedType, media);
         const multipart = new FormData();
-        multipart.set('request', JSON.stringify({ assetType, displayName: name, description: description || 'Reuploaded with ALEX Reuploader', creationContext: { creator } }));
+        multipart.set('request', JSON.stringify({ assetType: verifiedType, displayName: name, description: description || 'Reuploaded with ALEX Reuploader', creationContext: { creator } }));
         multipart.set('fileContent', new Blob([media], { type: mime }), fileName);
         const upload = await fetcher(`${ASSETS}/assets`, { method: 'POST', headers: bearer, body: multipart });
         const result = await remoteJson(upload);

@@ -201,3 +201,39 @@ test('automatic reupload refuses assets not verified as owned by the signed-in a
     assert.equal(contentRequested, false);
   }, mock);
 });
+
+test('automatic mode detects real asset type for images and group-owned meshes', async () => {
+  const uploads = [];
+  const mock = async (url, options = {}) => {
+    if (url.endsWith('/token')) return Response.json({ access_token: 'owned-media-token', expires_in: 900 });
+    if (url.endsWith('/userinfo')) return Response.json({ sub: '9140908042', preferred_username: 'Alex' });
+    if (url.endsWith('/assets/v1/assets/67891')) return Response.json({ assetType: 'ASSET_TYPE_DECAL', creationContext: { creator: { userId: '9140908042' } } });
+    if (url.endsWith('/assets/v1/assets/67892')) return Response.json({ assetType: 'ASSET_TYPE_MESH', creationContext: { creator: { groupId: '548271796' } } });
+    if (url.endsWith('/asset-delivery-api/v1/assetId/67891')) return Response.json({ location: 'https://cdn.rbxcdn.com/authorized-image' });
+    if (url.endsWith('/asset-delivery-api/v1/assetId/67892')) return Response.json({ location: 'https://cdn.rbxcdn.com/authorized-mesh' });
+    if (url === 'https://cdn.rbxcdn.com/authorized-image') return new Response(Buffer.from([137,80,78,71,13,10,26,10,1,2,3,4]));
+    if (url === 'https://cdn.rbxcdn.com/authorized-mesh') return new Response(Buffer.from('version 4.00\nauthorized mesh'));
+    if (url.endsWith('/assets/v1/assets') && options.method === 'POST') {
+      const info = JSON.parse(options.body.get('request'));
+      uploads.push({ info, contentType: options.body.get('fileContent').type });
+      return Response.json({ path: `operations/upload_${uploads.length}` });
+    }
+    throw new Error(`Unexpected Roblox request: ${url}`);
+  };
+  await withApp(async url => {
+    const start = await fetch(`${url}/auth/start`, { redirect: 'manual' });
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const callback = await fetch(`${url}/auth/callback?code=code&state=${state}`, { redirect: 'manual', headers: { cookie: start.headers.get('set-cookie').split(';')[0] } });
+    const cookie = callback.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    const me = await (await fetch(`${url}/api/me`, { headers: { cookie } })).json();
+    const upload = async payload => fetch(`${url}/api/auto-reupload`, {
+      method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-alex-csrf': me.csrf },
+      body: JSON.stringify({ assetType: 'Auto', rightsConfirmed: true, ...payload }),
+    });
+    assert.equal((await upload({ oldId: '67891', displayName: 'Photo' })).status, 202);
+    assert.equal((await upload({ oldId: '67892', displayName: 'Mesh', groupId: '548271796' })).status, 202);
+    assert.deepEqual(uploads.map(x => x.info.assetType), ['Decal', 'Mesh']);
+    assert.deepEqual(uploads.map(x => x.contentType), ['image/png', 'model/x-file-mesh-data']);
+    assert.equal(uploads[1].info.creationContext.creator.groupId, '548271796');
+  }, mock);
+});

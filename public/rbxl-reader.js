@@ -95,17 +95,52 @@ function idFromProperty(value) {
   return match ? (match[1] || match[0]) : null;
 }
 
+const ASSET_PROPERTIES = new Set([
+  'SoundId', 'AnimationId', 'Asset', 'AssetId', 'MeshId', 'TextureID', 'TextureId',
+  'Texture', 'Image', 'Video', 'Graphic', 'ShirtTemplate', 'PantsTemplate',
+  'ColorMap', 'NormalMap', 'MetalnessMap', 'RoughnessMap', 'ColorMapContent',
+  'NormalMapContent', 'MetalnessMapContent', 'RoughnessMapContent',
+  'SkyboxBk', 'SkyboxDn', 'SkyboxFt', 'SkyboxLf', 'SkyboxRt', 'SkyboxUp',
+  'SunTextureId', 'MoonTextureId', 'Face', 'Value', 'Source',
+]);
+const STRING_PROPERTIES = new Set(['Name', ...ASSET_PROPERTIES]);
+
+function assetClass(property, className, path = '') {
+  if (property === 'SoundId' || className === 'AudioPlayer') return 'Sound';
+  if (property === 'AnimationId') return 'Animation';
+  if (property === 'MeshId') return 'MeshPart';
+  if (property === 'Video') return 'VideoFrame';
+  if (property === 'Value') {
+    if (/sound|audio/i.test(path)) return 'Sound';
+    if (/anim/i.test(path)) return 'Animation';
+    return 'UnknownAsset';
+  }
+  if (/Texture|Image|Map|Skybox|Graphic|Face/i.test(property)) return 'Decal';
+  return className;
+}
+
 function scriptReferences(source) {
   const result = [];
-  const pattern = /(SoundId|AnimationId)\s*=\s*['"]?(?:rbxassetid:\/\/|https?:\/\/www\.roblox\.com\/asset\/\?id=)(\d{1,20})/gi;
-  for (const match of String(source).matchAll(pattern)) {
-    result.push({ className: match[1].toLowerCase() === 'soundid' ? 'Sound' : 'Animation', assetId: match[2] });
-    if (result.length >= 300) break;
+  const value = String(source);
+  const known = /(SoundId|AnimationId|MeshId|TextureID|Image|Video|Asset|ColorMap|NormalMap|MetalnessMap|RoughnessMap)\s*=\s*['"]?(?:rbxassetid:\/\/|https?:\/\/(?:www\.)?roblox\.com\/asset\/\?id=)(\d{1,20})/gi;
+  const seen = new Set();
+  for (const match of value.matchAll(known)) {
+    const key = `${match.index}:${match[2]}`;
+    seen.add(match[2]);
+    result.push({ className: assetClass(match[1], 'UnknownAsset'), assetId: match[2] });
+    if (result.length >= 400) return result;
+  }
+  const urls = /rbxassetid:\/\/(\d{1,20})|https?:\/\/(?:www\.)?roblox\.com\/asset\/\?id=(\d{1,20})|Content\.fromAssetId\(\s*(\d{1,20})\s*\)/gi;
+  for (const match of value.matchAll(urls)) {
+    const assetId = match[1] || match[2] || match[3];
+    if (!seen.has(assetId)) {
+      result.push({ className: 'UnknownAsset', assetId });
+      seen.add(assetId);
+    }
+    if (result.length >= 400) break;
   }
   return result;
 }
-
-const STRING_PROPERTIES = new Set(['Name', 'SoundId', 'AnimationId', 'Asset', 'AssetId', 'Value', 'Source']);
 
 export function scanBinaryPlace(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
@@ -189,16 +224,15 @@ export function scanBinaryPlace(arrayBuffer) {
   };
   for (const [id, instance] of instances) {
     const props = instance.properties;
-    if (instance.className === 'Sound') append(instance, id, 'SoundId', idFromProperty(props.SoundId));
-    if (instance.className === 'Animation') append(instance, id, 'AnimationId', idFromProperty(props.AnimationId));
-    if (instance.className === 'AudioPlayer') append(instance, id, 'Asset', idFromProperty(props.Asset || props.AssetId));
+    for (const property of ASSET_PROPERTIES) {
+      if (property === 'Source' || props[property] === undefined) continue;
+      const assetId = idFromProperty(props[property]);
+      if (!assetId) continue;
+      if (property === 'Value' && !['StringValue', 'IntValue', 'NumberValue'].includes(instance.className)) continue;
+      append(instance, id, property, assetId, assetClass(property, instance.className, pathFor(id)), property === 'Value' ? 'Value' : 'Instance');
+    }
     if (['Script', 'ModuleScript', 'LocalScript'].includes(instance.className) && props.Source) {
       for (const ref of scriptReferences(props.Source)) append(instance, id, 'Source (read only)', ref.assetId, ref.className, 'Script');
-    }
-    if (['StringValue', 'IntValue', 'NumberValue'].includes(instance.className) && props.Value !== undefined) {
-      const path = pathFor(id).toLowerCase();
-      const type = /sound|audio/.test(path) ? 'Sound' : /anim/.test(path) ? 'Animation' : null;
-      if (type) append(instance, id, 'Value (read only)', idFromProperty(props.Value), type, 'Value');
     }
   }
   return { items, format: 'RBXL', totalInstances: instances.size };
@@ -240,6 +274,12 @@ function rewriteMediaString(value, property, mapping) {
       replacements++;
       return `${before}${next}${after}`;
     });
+    changed = changed.replace(/(Content\.fromAssetId\(\s*)(\d{1,20})(\s*\))/gi, (whole, before, id, after) => {
+      const next = mapping.get(id);
+      if (!next || next === id) return whole;
+      replacements++;
+      return `${before}${next}${after}`;
+    });
   } else if (/^\d{1,20}$/.test(changed)) {
     const next = mapping.get(changed);
     if (next && next !== changed) { changed = next; replacements++; }
@@ -247,7 +287,7 @@ function rewriteMediaString(value, property, mapping) {
   return { value: changed, replacements };
 }
 
-const REWRITE_PROPERTIES = new Set(['SoundId', 'AnimationId', 'Asset', 'AssetId', 'Value', 'Source']);
+const REWRITE_PROPERTIES = ASSET_PROPERTIES;
 
 /**
  * Return a new, Studio-openable binary place with selected asset references

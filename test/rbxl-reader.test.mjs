@@ -113,6 +113,40 @@ test('replaces recognized asset URLs in script source without modifying other nu
   assert.equal(Buffer.from(updated.buffer).includes(Buffer.from('a.AnimationId="999888777"')), true);
 });
 
+test('scans and rewrites mesh and image IDs in the same RBXL place', () => {
+  const inst = [...u32(11), ...string('MeshPart'), 0, ...u32(1), ...refArray([1])];
+  const name = [...u32(11), ...string('Name'), 1, ...string('CustomMesh')];
+  const mesh = [...u32(11), ...string('MeshId'), 1, ...string('rbxassetid://220011')];
+  const texture = [...u32(11), ...string('TextureID'), 1, ...string('rbxassetid://330022')];
+  const prnt = [0, ...u32(1), ...refArray([1]), ...refArray([-1])];
+  const bytes = Uint8Array.from([
+    ...RBXL_SIGNATURE, 0, 0, ...u32(1), ...u32(1), ...new Array(8).fill(0),
+    ...chunk('INST', inst, true), ...chunk('PROP', name), ...chunk('PROP', mesh, true),
+    ...chunk('PROP', texture, true), ...chunk('PRNT', prnt), ...chunk('END\0', word('</roblox>')),
+  ]);
+  assert.deepEqual(scanBinaryPlace(bytes.buffer).items.map(x => [x.property, x.assetId]), [
+    ['MeshId', '220011'], ['TextureID', '330022'],
+  ]);
+  const rebuilt = rewriteBinaryPlace(bytes.buffer, { 220011: '990011', 330022: '880022' });
+  assert.equal(rebuilt.replacedReferences, 2);
+  assert.deepEqual(scanBinaryPlace(rebuilt.buffer).items.map(x => x.assetId), ['990011', '880022']);
+});
+
+test('recognizes Content.fromAssetId without rewriting unrelated script numbers', () => {
+  const inst = [...u32(3), ...string('LocalScript'), 0, ...u32(1), ...refArray([1])];
+  const source = [...u32(3), ...string('Source'), 1, ...string('local image = Content.fromAssetId(771144)\nprint(771144)')];
+  const prnt = [0, ...u32(1), ...refArray([1]), ...refArray([-1])];
+  const bytes = Uint8Array.from([
+    ...RBXL_SIGNATURE, 0, 0, ...u32(1), ...u32(1), ...new Array(8).fill(0),
+    ...chunk('INST', inst), ...chunk('PROP', source), ...chunk('PRNT', prnt),
+    ...chunk('END\0', word('</roblox>')),
+  ]);
+  assert.equal(scanBinaryPlace(bytes.buffer).items[0].assetId, '771144');
+  const rebuilt = rewriteBinaryPlace(bytes.buffer, { 771144: '991177' });
+  assert.equal(Buffer.from(rebuilt.buffer).includes(Buffer.from('Content.fromAssetId(991177)')), true);
+  assert.equal(Buffer.from(rebuilt.buffer).includes(Buffer.from('print(771144)')), true);
+});
+
 test('refuses non-RBXL data and truncated RBXL chunks', () => {
   assert.throws(() => scanBinaryPlace(enc.encode('hello').buffer), /not a binary Roblox/);
   const truncated = samplePlace().subarray(0, 60);
