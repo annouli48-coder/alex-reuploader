@@ -1,4 +1,4 @@
-# ALEX Reuploader — Multi-Asset RBXL Rebuild V7
+# ALEX Reuploader — Multi-Asset RBXL Rebuild V9 (login repair)
 
 Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, account-owned media reupload automation, and browser-based `.rbxl` rewriting. Railway-ready and no Studio plugin needed for the automatic workflow.
 
@@ -10,6 +10,8 @@ Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-f
 - Successful uploads are mapped and rewritten directly into a **new** `.rbxl` file. The download starts after the automatic pass; a manual download button is also available. Unmodified RBXL chunks are preserved, while changed property chunks are encoded uncompressed. The original place file is never altered or uploaded to ALEX.
 - No Studio plugin or manual `old_id=new_id` mapping is required or offered by the website.
 - Sign in with Roblox using **OAuth 2.0 authorization code + PKCE**; app secrets stay on the server.
+- Login survives page refreshes and Railway process restarts through an encrypted, HttpOnly, Secure-on-HTTPS session cookie. OAuth refresh-token changes are saved back to the cookie; the browser never reads the Roblox tokens.
+- Login status checks now start independently of local scan rendering. A missing scan counter that previously caused a JavaScript error, leaving the interface stuck on **Guest / Configuration needed** after Roblox OAuth returned, is restored and covered by a regression test.
 - Optional destination group and Ultra-only custom descriptions are available in the scanner automation settings. Group upload permission is checked by Roblox; entering a group ID does not grant upload permission.
 - Poll Roblox's asset operation to obtain each new asset ID; then download the newly rebuilt `.rbxl` with the matching asset references automatically rewritten. There is no separate media-upload form or mapping step on the website.
 - Verify the configured Roblox gamepasses server-side. Owner accounts `9140908042` and `10290256654` receive Ultra; other users receive their highest verified pass. Ultra adds custom asset descriptions.
@@ -42,6 +44,7 @@ Open `http://localhost:3000`. You can scan an `.rbxl` without OAuth credentials.
 | `ROBLOX_OAUTH_CLIENT_ID` | Your OAuth application client ID |
 | `ROBLOX_OAUTH_CLIENT_SECRET` | Your private OAuth client secret |
 | `PUBLIC_BASE_URL` | The exact `https://…` Railway domain, without trailing slash |
+| `ALEX_SESSION_SECRET` | Optional dedicated, strong private key for session encryption. Keep unchanged across deployments; by default the app derives this key from `ROBLOX_OAUTH_CLIENT_SECRET`. |
 | `PORT` | Not necessary; Railway injects it automatically |
 
 **Do not publish an OAuth secret, Roblox `.ROBLOSECURITY` cookie, or API key in public HTML or GitHub.** This app uploads through the individual user's scoped OAuth session; it does **not** require `ROBLOX_ASSET_API_KEY` or any Roblox cookie.
@@ -78,7 +81,8 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 - This automatic version supports Roblox's Assets API upload types: audio, animation, image/decal, mesh, model, and video, provided original asset content is accessible in a supported file format and no larger than this application's 20 MB cap. Some decal IDs deliver a Roblox asset wrapper instead of an uploadable image and will be skipped. Roblox may create models as packages rather than interchangeable raw assets.
 - Audio must meet Roblox's duration and upload quota limits; maximum media file size here is 20 MB.
 - A successful API request may return a processing operation, which the website polls automatically. If polling times out, verify on Creator Dashboard before retrying to avoid duplicate uploads.
-- Signed-in sessions, rate counts, and OAuth state live in one process's memory. Deploy as **one Railway replica** for this version. Restarting the service logs users out and resets app counters. Before a full public launch, replace these with persistent server-side storage, and add account-specific throttles and abuse controls.
+- Encrypted session cookies work across Railway refreshes, restarts, and replicas, provided the server's OAuth secret (or `ALEX_SESSION_SECRET`) remains the same. Sessions expire after seven days of inactivity; sign-in is required if Roblox revokes the refresh token or the encryption key changes. Logging out clears the browser cookie and blocks that session in the current process. For full cross-replica logout revocation, add shared revocation storage.
+- Rate counts, OAuth authorization state, and upload deduplication remain in process memory. Deploy as **one Railway replica** until you add a persistent database and account-specific throttles; restarts reset app-side counters.
 - The parser inspects only the local `.rbxl` supplied by its owner. It cannot read other users' private running-game server services or enumerate Roblox's private Asset Manager database.
 - Upload descriptions are intentionally disabled unless Ultra entitlement is server-verified.
 

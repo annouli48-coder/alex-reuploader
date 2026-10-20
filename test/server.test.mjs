@@ -1,8 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { createApp, mediaType, validateId } from '../server.mjs';
 import { parseImport, normalizeReferenceId, extractMediaReferencesFromScript } from '../public/scan-import.js';
+
+test('every frontend DOM lookup exists so a saved scan cannot abort login initialization', async () => {
+  const [script, markup] = await Promise.all([
+    readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+  ]);
+  const referencedIds = [...script.matchAll(/\$\('([a-zA-Z][a-zA-Z0-9_-]*)'\)/g)].map(match => match[1]);
+  const declaredIds = new Set([...markup.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
+  assert.deepEqual([...new Set(referencedIds.filter(id => !declaredIds.has(id)))], []);
+  assert.ok(script.indexOf("Promise.all([api('/api/config'), api('/api/me')])") < script.indexOf('loadSaved();'), 'login restoration should start before saved scan rendering');
+});
 
 test('validates Roblox asset IDs and extension/type combinations', () => {
   assert.equal(validateId('123456789'), '123456789');
@@ -120,6 +132,60 @@ test('OAuth login, original file upload, operation status and CSRF protection', 
     const result = await (await fetch(`${url}/api/operations/operation_123`, { headers: { cookie: sidCookie } })).json();
     assert.equal(result.assetId, '987654321');
     assert.equal(calls.filter(x => x.url.endsWith('/assets/v1/assets')).length, 1);
+  }, mock);
+});
+
+test('Roblox login survives fresh server instances and securely rotates refreshed tokens', async () => {
+  let refreshes = 0;
+  const mock = async (url, options = {}) => {
+    if (url.endsWith('/token')) {
+      const grant = options.body.get('grant_type');
+      if (grant === 'authorization_code') return Response.json({ access_token: 'first-access-token', refresh_token: 'first-refresh-token', expires_in: 1 });
+      assert.equal(grant, 'refresh_token');
+      assert.equal(options.body.get('refresh_token'), 'first-refresh-token');
+      refreshes++;
+      return Response.json({ access_token: 'new-access-token', refresh_token: 'new-refresh-token', expires_in: 900 });
+    }
+    if (url.endsWith('/userinfo')) return Response.json({ sub: '9140908042', preferred_username: 'Alex' });
+    throw new Error(`Unexpected OAuth call: ${url}`);
+  };
+  let loginCookie;
+  await withApp(async url => {
+    const begin = await fetch(`${url}/auth/start`, { redirect: 'manual' });
+    const state = new URL(begin.headers.get('location')).searchParams.get('state');
+    const callback = await fetch(`${url}/auth/callback?code=ok&state=${state}`, {
+      redirect: 'manual', headers: { cookie: begin.headers.get('set-cookie').split(';')[0] },
+    });
+    assert.equal(callback.status, 302);
+    assert.match(callback.headers.get('set-cookie'), /alex_sid=[^;]+; HttpOnly; SameSite=Lax; Path=\/; Max-Age=604800/);
+    loginCookie = callback.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    assert.doesNotMatch(loginCookie, /first-access-token|first-refresh-token|9140908042/, 'Secrets and user identity must be encrypted in the cookie');
+  }, mock);
+
+  let rotatedCookie;
+  await withApp(async url => {
+    const restored = await fetch(`${url}/api/me`, { headers: { cookie: loginCookie } });
+    const me = await restored.json();
+    assert.equal(me.loggedIn, true, 'a brand-new server process should restore the session');
+    assert.equal(me.user.name, 'Alex');
+    assert.equal(me.tier, 3);
+    assert.equal(refreshes, 1, 'expired OAuth access token should refresh once');
+    rotatedCookie = restored.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    const value = loginCookie.split('=')[1];
+    const tampered = `alex_sid=${value[0] === 'A' ? 'B' : 'A'}${value.slice(1)}`;
+    const denied = await (await fetch(`${url}/api/me`, { headers: { cookie: tampered } })).json();
+    assert.equal(denied.loggedIn, false, 'tampered session cookies must fail authentication');
+  }, mock);
+
+  await withApp(async url => {
+    const authenticated = await (await fetch(`${url}/api/me`, { headers: { cookie: rotatedCookie } })).json();
+    assert.equal(authenticated.loggedIn, true, 'the rotated refresh token should survive another server restart');
+    assert.equal(refreshes, 1, 'fresh access token should not trigger another refresh');
+    const signedOut = await fetch(`${url}/auth/logout`, { method: 'POST', headers: { cookie: rotatedCookie, 'x-alex-csrf': authenticated.csrf } });
+    assert.equal(signedOut.status, 200);
+    assert.match(signedOut.headers.get('set-cookie'), /Max-Age=0/);
+    const afterLogout = await (await fetch(`${url}/api/me`, { headers: { cookie: rotatedCookie } })).json();
+    assert.equal(afterLogout.loggedIn, false, 'logout revokes the current process session');
   }, mock);
 });
 

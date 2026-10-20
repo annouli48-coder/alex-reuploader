@@ -179,13 +179,18 @@ function renderAuth() {
     $('description').disabled = me.tier < 3;
     $('description').placeholder = me.tier < 3 ? 'Ultra tier required for custom descriptions' : 'Optional description for your new upload';
   } else {
+    const login = node('a', 'btn btn-small btn-primary', 'Connect Roblox ↗');
+    login.href = '/auth/start'; login.id = 'loginBtn';
+    login.addEventListener('click', event => { if (!state.config?.ready) { event.preventDefault(); toast('First add ROBLOX_OAUTH_CLIENT_ID, ROBLOX_OAUTH_CLIENT_SECRET and PUBLIC_BASE_URL to Railway Variables.'); } });
+    $('authArea').replaceChildren(login);
+    $('connection').innerHTML = '<i></i> Roblox not connected';
+    $('connection').classList.remove('live');
     $('description').disabled = true;
     $('statTier').textContent = 'Guest';
     $('statAllowance').textContent = 'Sign in to unlock uploads';
     $('oauthStatus').textContent = state.config?.ready ? 'Configured — waiting for your Roblox sign-in' : 'Add Roblox OAuth credentials to your Railway service';
     $('oauthPill').textContent = state.config?.ready ? 'READY' : 'SETUP NEEDED';
     $('oauthPill').classList.toggle('online', !!state.config?.ready);
-    $('loginBtn').addEventListener('click', event => { if (!state.config?.ready) { event.preventDefault(); toast('First add ROBLOX_OAUTH_CLIENT_ID, ROBLOX_OAUTH_CLIENT_SECRET and PUBLIC_BASE_URL to Railway Variables.'); } });
   }
 }
 async function api(path, options) {
@@ -297,7 +302,11 @@ $('publishGroup').addEventListener('change', () => $('groupField').classList.tog
 $('stopAuto').addEventListener('click', () => { state.stopRequested = true; $('autoProgress').textContent = 'Stopping after the current asset request…'; });
 $('copyMapping').addEventListener('click', downloadFixedPlace); $('copyMappingTop').addEventListener('click', downloadFixedPlace); $('downloadFixed').addEventListener('click', downloadFixedPlace);
 
-loadSaved(); render();
+// Restore authentication independently from saved scan rendering. If a local
+// scan is malformed, it must not prevent the Roblox login UI from initializing.
 Promise.all([api('/api/config'), api('/api/me')]).then(([config, me]) => {
   state.config = config; state.user = me; renderAuth();
 }).catch(err => { $('oauthStatus').textContent = `Service unavailable: ${err.message}`; $('oauthPill').textContent = 'OFFLINE'; toast('Could not contact the ALEX backend.'); });
+loadSaved();
+try { render(); }
+catch (error) { console.error('ALEX saved-scan display failed:', error); toast('Could not display the saved scan. Sign-in is still available.'); }

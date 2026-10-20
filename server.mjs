@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, createCipheriv, createDecipheriv } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -14,6 +14,7 @@ const OWNER_IDS = new Set(['9140908042', '10290256654']);
 const DEFAULT_GROUP = '548271796';
 const MAX_FILE = 20 * 1024 * 1024;
 const MAX_BODY = MAX_FILE + 512 * 1024;
+const SESSION_LIFETIME = 7 * 24 * 60 * 60 * 1000;
 const MIME = {
   Animation: { rbxm: 'model/x-rbxm', rbxmx: 'model/x-rbxm' },
   Audio: { mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac' },
@@ -166,12 +167,40 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
   const redirectUri = env.ROBLOX_OAUTH_REDIRECT_URI || `${origin}/auth/callback`;
   const secure = origin.startsWith('https://');
   const configured = !!(clientId && clientSecret && env.PUBLIC_BASE_URL);
-  const sessions = new Map();
+  // A sealed, HttpOnly cookie can be recovered after a Railway restart or by
+  // another replica. The key is derived from the server-only OAuth secret unless
+  // a dedicated persistent ALEX_SESSION_SECRET is configured.
+  const sessionKey = createHash('sha256').update('alex-reuploader/session/v1\0').update(env.ALEX_SESSION_SECRET || clientSecret).digest();
+  const revokedSessions = new Map();
   const states = new Map();
   const daily = new Map();
   const autoPending = new Map();
 
-  function sessionOf(req) { return sessions.get(parseCookie(req.headers.cookie)) || null; }
+  function sealSession(session) {
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', sessionKey, nonce);
+    const bytes = Buffer.concat([cipher.update(JSON.stringify(session), 'utf8'), cipher.final()]);
+    return Buffer.concat([nonce, cipher.getAuthTag(), bytes]).toString('base64url');
+  }
+  function sessionOf(req) {
+    const value = parseCookie(req.headers.cookie);
+    if (!value || value.length > 4096) return null;
+    try {
+      const bytes = Buffer.from(value, 'base64url');
+      if (bytes.length < 29) return null;
+      const decipher = createDecipheriv('aes-256-gcm', sessionKey, bytes.subarray(0, 12));
+      decipher.setAuthTag(bytes.subarray(12, 28));
+      const session = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+      if (!session || typeof session !== 'object' || !/^[0-9]+$/.test(session.userId) ||
+          typeof session.sid !== 'string' || !session.sid || typeof session.csrf !== 'string' ||
+          !Number.isFinite(session.validUntil) || session.validUntil < Date.now() ||
+          revokedSessions.has(session.sid)) return null;
+      return session;
+    } catch { return null; }
+  }
+  function writeSession(res, session) {
+    res.setHeader('set-cookie', cookieFor(sealSession(session), secure));
+  }
   function requireUser(req) {
     const session = sessionOf(req);
     if (!session) throw new HttpError(401, 'Sign in with Roblox first.');
@@ -185,7 +214,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
     if (req.headers['x-alex-csrf'] !== session.csrf) throw new HttpError(403, 'Session validation failed. Refresh the page.');
     return session;
   }
-  async function accessToken(session) {
+  async function accessToken(session, res) {
     if (session.expiresAt > Date.now() + 35_000) return session.access;
     if (!session.refresh) throw new HttpError(401, 'Roblox session expired; sign in again.');
     const r = await fetcher(`${OAUTH}/token`, {
@@ -198,6 +227,9 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
     session.access = result.access_token;
     session.refresh = result.refresh_token || session.refresh;
     session.expiresAt = Date.now() + (Number(result.expires_in) || 900) * 1000;
+    session.validUntil = Date.now() + SESSION_LIFETIME;
+    // Roblox can rotate refresh tokens: persist each new token in the cookie.
+    writeSession(res, session);
     return session.access;
   }
   async function checkTier(session) {
@@ -235,6 +267,12 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
       if (pathname === '/api/me') {
         const session = sessionOf(req);
         if (!session) return json(res, 200, { loggedIn: false });
+        try { await accessToken(session, res); }
+        catch (error) {
+          if (!(error instanceof HttpError) || error.status !== 401) throw error;
+          res.setHeader('set-cookie', cookieFor('', secure, true));
+          return json(res, 200, { loggedIn: false });
+        }
         const tier = await checkTier(session);
         return json(res, 200, { loggedIn: true, user: { id: session.userId, name: session.name, avatar: session.picture }, tier, plan: tier ? PASS_NAMES[tier - 1] : 'Free', allowance: available(session, tier), csrf: session.csrf });
       }
@@ -263,14 +301,14 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const profileResponse = await fetcher(`${OAUTH}/userinfo`, { headers: { authorization: `Bearer ${result.access_token}` } });
         const profile = await remoteJson(profileResponse);
         if (!profileResponse.ok || !/^\d+$/.test(String(profile.sub))) throw new HttpError(502, 'Could not verify the Roblox account.');
-        const sid = token();
-        sessions.set(sid, { userId: String(profile.sub), name: String(profile.preferred_username || profile.name || 'Creator'), picture: typeof profile.picture === 'string' ? profile.picture : '', access: result.access_token, refresh: result.refresh_token || '', expiresAt: Date.now() + (Number(result.expires_in) || 900) * 1000, csrf: token(), tier: 0, tierValidUntil: 0 });
-        res.setHeader('set-cookie', [`alex_oauth=; HttpOnly; SameSite=Lax; Path=/auth/callback; Max-Age=0; ${secure ? 'Secure' : ''}`, cookieFor(sid, secure)]);
+        const session = { sid: token(), userId: String(profile.sub), name: String(profile.preferred_username || profile.name || 'Creator'), picture: typeof profile.picture === 'string' ? profile.picture : '', access: result.access_token, refresh: result.refresh_token || '', expiresAt: Date.now() + (Number(result.expires_in) || 900) * 1000, csrf: token(), tier: 0, tierValidUntil: 0, validUntil: Date.now() + SESSION_LIFETIME };
+        res.setHeader('set-cookie', [`alex_oauth=; HttpOnly; SameSite=Lax; Path=/auth/callback; Max-Age=0; ${secure ? 'Secure' : ''}`, cookieFor(sealSession(session), secure)]);
         return redirect(res, '/');
       }
       if (pathname === '/auth/logout' && req.method === 'POST') {
-        checkOrigin(req);
-        sessions.delete(parseCookie(req.headers.cookie));
+        const session = checkOrigin(req);
+        revokedSessions.set(session.sid, session.validUntil);
+        if (revokedSessions.size > 1000) for (const [sid, expiry] of revokedSessions) if (expiry < Date.now()) revokedSessions.delete(sid);
         res.setHeader('set-cookie', cookieFor('', secure, true));
         return json(res, 200, { ok: true });
       }
@@ -293,7 +331,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const dedupeKey = `${session.userId}:${oldId}:${groupId}`;
         if (autoPending.has(dedupeKey)) return json(res, 202, { oldId, operation: autoPending.get(dedupeKey), status: 'processing' });
         if (quota.used >= quota.limit) throw new HttpError(429, 'Daily ALEX upload allowance reached.');
-        const bearer = { authorization: `Bearer ${await accessToken(session)}` };
+        const bearer = { authorization: `Bearer ${await accessToken(session, res)}` };
 
         // Verify the original asset is owned by this signed-in account. An
         // RBXL reference or a public download is not proof of redistribution rights.
@@ -359,7 +397,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const name = String(form.get('displayName') || file.name.replace(/\.[^.]+$/, '')).trim().slice(0, 50);
         if (!name) throw new HttpError(400, 'Asset name cannot be empty.');
 
-        const tokenValue = await accessToken(session);
+        const tokenValue = await accessToken(session, res);
         const upload = new FormData();
         upload.set('request', JSON.stringify({ assetType, displayName: name, description: description || 'Uploaded with ALEX Reuploader', creationContext: { creator } }));
         upload.set('fileContent', new Blob([await file.arrayBuffer()], { type: contentType }), file.name);
@@ -375,7 +413,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const session = requireUser(req);
         const id = pathname.slice('/api/operations/'.length);
         if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) throw new HttpError(400, 'Invalid operation ID.');
-        const upstream = await fetcher(`${ASSETS}/operations/${id}`, { headers: { authorization: `Bearer ${await accessToken(session)}` } });
+        const upstream = await fetcher(`${ASSETS}/operations/${id}`, { headers: { authorization: `Bearer ${await accessToken(session, res)}` } });
         const output = await remoteJson(upstream);
         if (!upstream.ok) throw new HttpError(502, 'Could not check the Roblox upload status.');
         const moderationRejected = output.response?.moderationResult?.moderationState === 'MODERATION_STATE_REJECTED';
