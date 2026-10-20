@@ -1,9 +1,9 @@
 import { normalizeReferenceId } from './scan-import.js';
-import { scanBinaryPlace } from './rbxl-reader.js';
+import { scanBinaryPlace, rewriteBinaryPlace } from './rbxl-reader.js';
 
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
-const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null };
+const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false };
 
 function loadSaved() {
   try {
@@ -15,11 +15,12 @@ function loadSaved() {
     if (data.scanFormat === 'rbxl') {
       state.scanCount = Number(data.scanCount) || 0;
       if (data.insights && typeof data.insights === 'object') state.insights = data.insights;
+      state.placeFingerprint = String(data.placeFingerprint || '');
     }
   } catch { /* Browser storage may be empty or inaccessible. */ }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ scanFormat: 'rbxl', items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights })); } catch { toast('Could not save to this browser. Export your map now.'); }
+  try { localStorage.setItem(STORE, JSON.stringify({ scanFormat: 'rbxl', items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights, placeFingerprint: state.placeFingerprint })); } catch { toast('Could not save to this browser. Download your updated place before closing.'); }
 }
 function toast(message) {
   const target = $('toast'); target.textContent = message; target.classList.add('visible');
@@ -81,11 +82,6 @@ function show(screen) {
   $('pageCrumb').textContent = ({ dashboard: 'Overview', assets: 'Asset scanner', uploads: 'Reupload queue', plans: 'Memberships' })[screen] || 'Overview';
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
-function selectedType() {
-  const selected = state.items.find(x => x.id === $('targetAsset').value);
-  if (selected && selected.type !== 'Manual') $('uploadType').value = selected.type;
-  if (selected) $('displayName').value = `${selected.name}`.slice(0, 50);
-}
 function renderAssets() {
   const filter = $('filterAsset').value.trim().toLowerCase();
   const type = $('typeFilter').value;
@@ -99,10 +95,8 @@ function renderAssets() {
     const refs = node('td', '', String(item.refs));
     const newId = node('td'); const mapped = state.mapping[item.id]; newId.append(node('code', '', mapped || '—'));
     const actions = node('td');
-    const button = node('button', 'link-action', item.type === 'Manual' ? 'Studio only' : mapped ? 'Reupload ↗' : 'Upload ↗');
-    button.disabled = item.type === 'Manual';
-    button.addEventListener('click', () => { $('targetAsset').value = item.id; selectedType(); show('uploads'); });
-    actions.append(button); tr.append(name, kind, refs, newId, actions); tbody.append(tr);
+    actions.append(node('span', 'quiet', mapped ? 'Ready' : item.type === 'Manual' ? 'Skipped' : 'Check ownership'));
+    tr.append(name, kind, refs, newId, actions); tbody.append(tr);
   }
 }
 function renderQueue() {
@@ -160,13 +154,7 @@ function render() {
   $('assetCount').textContent = String(state.items.length);
   $('scannerPill').textContent = state.items.length ? 'SCAN IMPORTED' : 'AWAITING SCAN';
   $('scannerPill').classList.toggle('online', state.items.length > 0);
-  const selection = $('targetAsset').value;
-  $('targetAsset').replaceChildren(node('option', '', state.items.length ? 'Select one detected ID…' : 'Import a Studio scan first'));
-  $('targetAsset').firstChild.value = '';
-  for (const item of state.items.filter(x => x.type !== 'Manual')) {
-    const opt = node('option', '', `${item.name} • ${item.id}`); opt.value = item.id; $('targetAsset').append(opt);
-  }
-  if (state.items.some(x => x.id === selection && x.type !== 'Manual')) $('targetAsset').value = selection;
+  $('downloadFixed').disabled = !state.placeBuffer || !state.items.some(x => state.mapping[x.id]);
   renderAssets(); renderQueue(); renderInsights();
 }
 function renderAuth() {
@@ -186,7 +174,6 @@ function renderAuth() {
     $('oauthStatus').textContent = `Connected as @${me.user.name}`;
     $('description').disabled = me.tier < 3;
     $('description').placeholder = me.tier < 3 ? 'Ultra tier required for custom descriptions' : 'Optional description for your new upload';
-    $('uploadFeedback').textContent = 'Ready to upload original media you have rights to.';
   } else {
     $('description').disabled = true;
     $('statTier').textContent = 'Guest';
@@ -195,7 +182,6 @@ function renderAuth() {
     $('oauthPill').textContent = state.config?.ready ? 'READY' : 'SETUP NEEDED';
     $('oauthPill').classList.toggle('online', !!state.config?.ready);
     $('loginBtn').addEventListener('click', event => { if (!state.config?.ready) { event.preventDefault(); toast('First add ROBLOX_OAUTH_CLIENT_ID, ROBLOX_OAUTH_CLIENT_SECRET and PUBLIC_BASE_URL to Railway Variables.'); } });
-    $('uploadFeedback').textContent = 'Connect Roblox to start reuploading.';
   }
 }
 async function api(path, options) {
@@ -204,15 +190,56 @@ async function api(path, options) {
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 }
-function mapText() { return Object.entries(state.mapping).filter(([a, b]) => /^\d+$/.test(a) && /^\d+$/.test(b)).map(([a, b]) => `${a}=${b}`).join('\n'); }
-async function copyMap() {
-  const content = mapText();
-  if (!content) return toast('No ID replacements yet. Upload at least one asset.');
-  try { await navigator.clipboard.writeText(content); toast('Copied! Paste the old=new mapping into the Studio plugin.'); }
-  catch {
-    const field = node('textarea'); field.value = content; document.body.append(field); field.select();
-    const done = document.execCommand('copy'); field.remove(); toast(done ? 'Copied the ID map.' : 'Clipboard unavailable in this browser.');
-  }
+function downloadFixedPlace() {
+  if (!state.placeBuffer) return toast('Choose the original .rbxl file again before downloading the rebuilt copy.');
+  try {
+    const rebuilt = rewriteBinaryPlace(state.placeBuffer, state.mapping);
+    if (!rebuilt.replacedReferences) return toast('No matching IDs have been reuploaded yet. Your original file is unchanged.');
+    // Verify the structure is still parseable before offering the output.
+    const checked = scanBinaryPlace(rebuilt.buffer);
+    if (checked.totalInstances !== state.totalInstances) throw new Error('Rebuilt game did not pass structure validation. No file was downloaded.');
+    const cleanName = (state.placeName.replace(/\.rbxl$/i, '') || 'Game').replace(/[^a-z0-9 _.-]/gi, '_').slice(0, 90);
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(new Blob([rebuilt.buffer], { type: 'application/octet-stream' }));
+    link.href = url;
+    link.download = `${cleanName}_ALEX_REUPLOADED.rbxl`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast(`Downloaded rebuilt RBXL with ${rebuilt.replacedReferences} updated references. Your original was preserved.`);
+  } catch (error) { toast(`Could not rebuild the RBXL: ${error.message}`); }
+}
+
+async function autoReuploadScanned() {
+  if (state.autoBusy) return;
+  if (!state.user?.loggedIn) return toast('Sign in with Roblox before enabling automatic reuploads.');
+  const eligible = state.items.filter(item => (item.type === 'Audio' || item.type === 'Animation') && !state.mapping[item.id]);
+  if (!eligible.length) return toast('There are no new audio or animation references to reupload.');
+  const progress = $('autoProgress');
+  state.autoBusy = true;
+  $('manifestFile').disabled = true;
+  let completed = 0, skipped = 0;
+  try {
+    for (const [index, item] of eligible.entries()) {
+      progress.textContent = `Processing ${index + 1}/${eligible.length}: ${item.name} (${item.id})…`;
+      try {
+        const accepted = await api('/api/auto-reupload', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-alex-csrf': state.user.csrf },
+          body: JSON.stringify({ oldId: item.id, assetType: item.type, displayName: item.name, rightsConfirmed: true,
+            groupId: $('publishGroup').checked ? $('groupId').value.trim() : '', description: $('description').value.trim() }),
+        });
+        const newId = await pollOperation(accepted.operation);
+        state.mapping[item.id] = newId;
+        completed++; save(); render();
+      } catch (error) {
+        skipped++;
+        progress.textContent = `Skipped ${item.id}: ${error.message}`;
+      }
+    }
+    progress.textContent = `Finished: ${completed} reuploaded, ${skipped} skipped. Only verified eligible assets were changed.`;
+    if (completed) downloadFixedPlace();
+    try { state.user = await api('/api/me'); renderAuth(); } catch { /* Upload results remain available. */ }
+  } finally { state.autoBusy = false; $('manifestFile').disabled = false; }
 }
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function pollOperation(operation) {
@@ -227,34 +254,6 @@ async function pollOperation(operation) {
   }
   throw new Error('Roblox is still processing. Check the Creator Dashboard before retrying to avoid duplicate uploads.');
 }
-async function upload(event) {
-  event.preventDefault();
-  if (!state.user?.loggedIn) return toast('Sign in with Roblox first.');
-  const id = $('targetAsset').value;
-  const file = $('assetFile').files[0];
-  if (!id || !file) return toast('Select an asset and choose its original media file.');
-  if (!$('confirmRights').checked) return toast('Please confirm you have permission to upload the file.');
-  if (file.size > 20 * 1024 * 1024) return toast('File must be 20 MB or smaller.');
-  const submit = $('uploadSubmit');
-  submit.disabled = true; submit.textContent = 'Uploading…';
-  const feedback = $('uploadFeedback'); feedback.className = 'inline-hint'; feedback.textContent = `Uploading ${file.name} to Roblox…`;
-  try {
-    const form = new FormData();
-    form.set('file', file); form.set('oldId', id); form.set('assetType', $('uploadType').value); form.set('displayName', $('displayName').value);
-    form.set('description', $('description').value);
-    if ($('publishGroup').checked) form.set('groupId', $('groupId').value);
-    const response = await api('/api/upload', { method: 'POST', headers: { 'x-alex-csrf': state.user.csrf }, body: form });
-    feedback.textContent = 'Upload accepted! Waiting for Roblox asset processing…';
-    const newId = await pollOperation(response.operation);
-    state.mapping[id] = newId; save(); render();
-    feedback.className = 'inline-hint success'; feedback.textContent = `Success! Roblox created asset ${newId}. Copy your map into Studio.`;
-    $('assetFile').value = ''; $('fileTitle').textContent = 'Click to select an original file';
-    toast(`Reuploaded! ${id} → ${newId}`);
-    state.user = await api('/api/me'); renderAuth();
-  } catch (error) { feedback.className = 'inline-hint error'; feedback.textContent = error.message; toast(error.message); }
-  finally { submit.disabled = false; submit.textContent = 'Upload to Roblox ↗'; }
-}
-
 document.querySelectorAll('[data-screen]').forEach(b => b.addEventListener('click', () => show(b.dataset.screen)));
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => show(b.dataset.goto)));
 $('manifestFile').addEventListener('change', async event => {
@@ -265,18 +264,22 @@ $('manifestFile').addEventListener('change', async event => {
   try {
     const buffer = await file.arrayBuffer();
     const result = scanBinaryPlace(buffer);
+    const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
+    if (fingerprint !== state.placeFingerprint) state.mapping = {};
+    state.placeBuffer = buffer;
+    state.placeName = file.name;
+    state.placeFingerprint = fingerprint;
+    state.totalInstances = result.totalInstances;
     const message = parseScan(result);
     $('scanStatus').textContent = `${result.totalInstances.toLocaleString()} instances examined. ${message}`;
     toast(message);
+    if ($('autoMode').checked) await autoReuploadScanned();
   } catch (e) { $('scanStatus').textContent = e.message; toast(e.message); }
   finally { event.target.value = ''; }
 });
 $('filterAsset').addEventListener('input', renderAssets); $('typeFilter').addEventListener('change', renderAssets);
-$('targetAsset').addEventListener('change', selectedType);
 $('publishGroup').addEventListener('change', () => $('groupField').classList.toggle('hidden', !$('publishGroup').checked));
-$('assetFile').addEventListener('change', () => { const file = $('assetFile').files[0]; if (file) $('fileTitle').textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`; });
-$('uploadForm').addEventListener('submit', upload);
-$('copyMapping').addEventListener('click', copyMap); $('copyMappingTop').addEventListener('click', copyMap);
+$('copyMapping').addEventListener('click', downloadFixedPlace); $('copyMappingTop').addEventListener('click', downloadFixedPlace); $('downloadFixed').addEventListener('click', downloadFixedPlace);
 
 loadSaved(); render();
 Promise.all([api('/api/config'), api('/api/me')]).then(([config, me]) => {

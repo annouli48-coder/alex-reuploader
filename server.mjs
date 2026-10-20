@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const OAUTH = 'https://apis.roblox.com/oauth/v1';
 const ASSETS = 'https://apis.roblox.com/assets/v1';
+const ASSET_DELIVERY = 'https://apis.roblox.com/asset-delivery-api/v1/assetId';
 const PASSES = ['2037861333', '2037927296', '2040560797'];
 const PASS_NAMES = ['Creator', 'Pro', 'Ultra'];
 const OWNER_IDS = new Set(['9140908042', '10290256654']);
@@ -84,6 +85,53 @@ async function remoteJson(response) {
   try { return JSON.parse(str); } catch { return { error: str.slice(0, 350) }; }
 }
 
+async function smallJsonBody(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 16_384) throw new HttpError(413, 'Automatic reupload request is too large.');
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw new HttpError(400, 'Invalid automatic reupload request.'); }
+}
+
+async function limitedAssetBytes(response) {
+  if (Number(response.headers.get('content-length')) > MAX_FILE) throw new HttpError(413, 'The source asset is larger than 20 MB.');
+  let size = 0;
+  const chunks = [];
+  for await (const piece of response.body) {
+    const bytes = Buffer.from(piece);
+    size += bytes.length;
+    if (size > MAX_FILE) throw new HttpError(413, 'The source asset is larger than 20 MB.');
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks);
+}
+
+function recognizedAssetFile(type, bytes) {
+  if (type === 'Audio') {
+    if (bytes.subarray(0, 4).toString('ascii') === 'OggS') return ['source.ogg', 'audio/ogg'];
+    if (bytes.subarray(0, 3).toString('ascii') === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return ['source.mp3', 'audio/mpeg'];
+    if (bytes.subarray(0, 4).toString('ascii') === 'fLaC') return ['source.flac', 'audio/flac'];
+    if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WAVE') return ['source.wav', 'audio/wav'];
+  }
+  if (type === 'Animation') {
+    if (bytes.subarray(0, 8).toString('ascii') === '<roblox!') return ['source.rbxm', 'model/x-rbxm'];
+    if (bytes.subarray(0, 200).toString('utf8').match(/^\s*(?:<\?xml[^>]*>\s*)?<roblox\b/)) return ['source.rbxmx', 'model/x-rbxm'];
+  }
+  throw new HttpError(422, 'Roblox returned asset content in a format this reuploader cannot safely upload.');
+}
+
+function trustedDownloadUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' && (parsed.hostname === 'rbxcdn.com' || parsed.hostname.endsWith('.rbxcdn.com'))) return parsed.href;
+  } catch { /* Untrusted or malformed URL. */ }
+  throw new HttpError(502, 'Roblox returned an untrusted asset download location.');
+}
+
 export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}) {
   const clientId = env.ROBLOX_OAUTH_CLIENT_ID || '';
   const clientSecret = env.ROBLOX_OAUTH_CLIENT_SECRET || '';
@@ -94,6 +142,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
   const sessions = new Map();
   const states = new Map();
   const daily = new Map();
+  const autoPending = new Map();
 
   function sessionOf(req) { return sessions.get(parseCookie(req.headers.cookie)) || null; }
   function requireUser(req) {
@@ -198,6 +247,67 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         res.setHeader('set-cookie', cookieFor('', secure, true));
         return json(res, 200, { ok: true });
       }
+      if (pathname === '/api/auto-reupload' && req.method === 'POST') {
+        const session = checkOrigin(req);
+        const options = await smallJsonBody(req);
+        if (options.rightsConfirmed !== true) throw new HttpError(403, 'Confirm you own or have explicit rights to republish these assets.');
+        const oldId = validateId(options.oldId);
+        const assetType = String(options.assetType || '');
+        if (assetType !== 'Audio' && assetType !== 'Animation') throw new HttpError(400, 'Automatic mode supports audio and animations only.');
+        const groupId = String(options.groupId || '').trim();
+        const creator = groupId ? { groupId: validateId(groupId) } : { userId: session.userId };
+        const name = String(options.displayName || `${assetType} ${oldId}`).trim().slice(0, 50);
+        if (!name) throw new HttpError(400, 'An asset name is required.');
+        const tier = await checkTier(session);
+        const description = String(options.description || '').trim();
+        if (description.length > 0 && tier < 3) throw new HttpError(403, 'Custom descriptions require the Ultra tier.');
+        if (description.length > 1000) throw new HttpError(400, 'Description is too long.');
+        const quota = available(session, tier);
+        const dedupeKey = `${session.userId}:${oldId}:${groupId}`;
+        if (autoPending.has(dedupeKey)) return json(res, 202, { oldId, operation: autoPending.get(dedupeKey), status: 'processing' });
+        if (quota.used >= quota.limit) throw new HttpError(429, 'Daily ALEX upload allowance reached.');
+        const bearer = { authorization: `Bearer ${await accessToken(session)}` };
+
+        // Verify the original asset is owned by this signed-in account. An
+        // RBXL reference or a public download is not proof of redistribution rights.
+        const metadataResponse = await fetcher(`${ASSETS}/assets/${oldId}`, { headers: bearer, redirect: 'manual' });
+        if (!metadataResponse.ok) throw new HttpError(403, 'Roblox did not authorize reading this source asset.');
+        const metadata = await remoteJson(metadataResponse);
+        if (String(metadata.creationContext?.creator?.userId || '') !== session.userId) {
+          throw new HttpError(403, 'Automatic mode only reuploads assets owned by the signed-in Roblox user.');
+        }
+        const declaredType = String(metadata.assetType || '').toUpperCase();
+        if (declaredType && declaredType !== assetType.toUpperCase() && declaredType !== `ASSET_TYPE_${assetType.toUpperCase()}`) {
+          throw new HttpError(422, 'Roblox asset type does not match the file reference.');
+        }
+
+        let content = await fetcher(`${ASSET_DELIVERY}/${oldId}`, { headers: bearer, redirect: 'manual' });
+        if (!content.ok && content.status !== 302 && content.status !== 307) throw new HttpError(403, 'Roblox did not provide downloadable original media for this asset.');
+        let location = content.headers.get('location');
+        if (!location && String(content.headers.get('content-type') || '').includes('application/json')) {
+          const result = await remoteJson(content);
+          location = result.location || result.locations?.[0]?.location || result.locations?.[0]?.url || null;
+          if (!location) throw new HttpError(422, 'Roblox returned no downloadable original media.');
+        }
+        if (location) {
+          content = await fetcher(trustedDownloadUrl(location), { redirect: 'manual' });
+          if (!content.ok) throw new HttpError(403, 'Roblox denied access to the original media bytes.');
+        }
+        const media = await limitedAssetBytes(content);
+        if (!media.length) throw new HttpError(422, 'The original asset data was empty.');
+        const [fileName, mime] = recognizedAssetFile(assetType, media);
+        const multipart = new FormData();
+        multipart.set('request', JSON.stringify({ assetType, displayName: name, description: description || 'Reuploaded with ALEX Reuploader', creationContext: { creator } }));
+        multipart.set('fileContent', new Blob([media], { type: mime }), fileName);
+        const upload = await fetcher(`${ASSETS}/assets`, { method: 'POST', headers: bearer, body: multipart });
+        const result = await remoteJson(upload);
+        if (!upload.ok) throw new HttpError(upload.status >= 500 ? 502 : 400, `Roblox rejected this authorized reupload: ${String(result.message || result.error || 'Check asset permissions and quotas.').slice(0, 160)}`);
+        const path = String(result.path || '');
+        if (!/^operations\/[A-Za-z0-9_-]+$/.test(path)) throw new HttpError(502, 'Roblox returned no operation ID.');
+        daily.set(session.userId, { day: quota.day, used: quota.used + 1 });
+        autoPending.set(dedupeKey, path.split('/')[1]);
+        return json(res, 202, { oldId, operation: path.split('/')[1], status: 'processing' });
+      }
       if (pathname === '/api/upload' && req.method === 'POST') {
         const session = checkOrigin(req);
         const tier = await checkTier(session);
@@ -238,6 +348,11 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const output = await remoteJson(upstream);
         if (!upstream.ok) throw new HttpError(502, 'Could not check the Roblox upload status.');
         const moderationRejected = output.response?.moderationResult?.moderationState === 'MODERATION_STATE_REJECTED';
+        if (output.done && (output.error || moderationRejected)) {
+          for (const [key, operationId] of autoPending) {
+            if (operationId === id && key.startsWith(`${session.userId}:`)) autoPending.delete(key);
+          }
+        }
         return json(res, 200, { done: output.done === true, assetId: output.done ? String(output.response?.assetId || '') : '', error: String(output.error?.message || (moderationRejected ? 'Roblox moderation rejected the asset.' : '')) });
       }
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');

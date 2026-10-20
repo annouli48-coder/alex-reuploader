@@ -1,15 +1,17 @@
-# ALEX Reuploader
+# ALEX Reuploader — Automatic RBXL Rebuild
 
-Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, a Studio ID-mapping plugin, and a Railway-ready website.
+Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, account-owned media reupload automation, and browser-based `.rbxl` rewriting. Railway-ready and no Studio plugin needed for the automatic workflow.
 
 ## What works
 
 - The website file picker accepts **only `.rbxl`** Roblox place files (binary format). It reads the file locally in the browser, finds `Sound`, `Animation`, and common `AudioPlayer` asset references, and displays location counts and asset-ID lists. The place file is never uploaded to ALEX.
 - The `.rbxl` parser handles modern Zstandard (ZSTD), legacy LZ4, and uncompressed chunks, including mixed-compression files. It recognizes clear `SoundId`/`AnimationId` references embedded in scripts and appropriately named value objects where those strings are serialized in the file.
-- The optional Studio plugin can scan an open project separately, select an existing animation from Roblox's own picker, and apply a copied `old_id=new_id` map with Undo support. It is no longer required for uploading scan data to the website.
+- After sign-in, users can explicitly opt into automatic reuploads. Selecting an `.rbxl` triggers a sequential attempt to retrieve each scanned sound/animation using Roblox OAuth. The backend requires source-asset metadata to verify the signed-in account is the original creator and refuses all other assets. Missing, private, unrecognized, or denied media are skipped.
+- Successful uploads are mapped and rewritten directly into a **new** `.rbxl` file. The download starts after the automatic pass; a manual download button is also available. Unmodified RBXL chunks are preserved, while changed property chunks are encoded uncompressed. The original place file is never altered or uploaded to ALEX.
+- No Studio plugin or manual `old_id=new_id` mapping is required or offered by the website.
 - Sign in with Roblox using **OAuth 2.0 authorization code + PKCE**; app secrets stay on the server.
-- Upload a **file you own or may redistribute** via Roblox's Open Cloud Assets API. Optional group target is checked by Roblox; entering a group ID does not grant upload permission.
-- Poll Roblox's asset operation to obtain a new asset ID; export `old_id=new_id` mapping to the Studio plugin for editing, with Studio Undo support.
+- Optional destination group and Ultra-only custom descriptions are available in the scanner automation settings. Group upload permission is checked by Roblox; entering a group ID does not grant upload permission.
+- Poll Roblox's asset operation to obtain each new asset ID; then download the newly rebuilt `.rbxl` with the matching asset references automatically rewritten. There is no separate media-upload form or mapping step on the website.
 - Verify the configured Roblox gamepasses server-side. Owner accounts `9140908042` and `10290256654` receive Ultra; other users receive their highest verified pass. Ultra adds custom asset descriptions.
 - Browser keeps the scan and successful mappings locally (no source media stored by the app). Media is sent to Roblox on upload.
 
@@ -42,28 +44,21 @@ Open `http://localhost:3000`. You can scan an `.rbxl` without OAuth credentials.
 | `PUBLIC_BASE_URL` | The exact `https://…` Railway domain, without trailing slash |
 | `PORT` | Not necessary; Railway injects it automatically |
 
-**Do not publish an OAuth secret, Roblox `.ROBLOSECURITY` cookie, or API key in the plugin, HTML, or GitHub.** This app uploads through the individual user's scoped OAuth session; it does **not** require `ROBLOX_ASSET_API_KEY` or any Roblox cookie.
+**Do not publish an OAuth secret, Roblox `.ROBLOSECURITY` cookie, or API key in public HTML or GitHub.** This app uploads through the individual user's scoped OAuth session; it does **not** require `ROBLOX_ASSET_API_KEY` or any Roblox cookie.
 
-### Scan your .RBXL file
+### Scan, automatically reupload, and rebuild your .RBXL file
 
 1. Open your own experience in Roblox Studio.
 2. Use **File → Save to File** and save the place in binary `.rbxl` format.
-3. Open the ALEX website → **Asset scanner** → **Choose .RBXL file**. No plugin or JSON export is needed.
-4. Review the detected sounds, animations, and expandable service/folder hierarchy. The scanner reads asset references, **not** the original downloadable sound/animation bytes.
-5. Sign in with Roblox to upload permitted original media files. Each successful upload creates a new Roblox asset ID, which is mapped to the original reference.
+3. Open the ALEX website and **Sign in with Roblox**.
+4. Go to **Asset scanner**. For hands-free eligible source uploads, check **Automatically reupload my own assets**. Choosing this option explicitly authorizes new Roblox uploads, which consume Roblox upload quotas.
+5. Click **Choose .RBXL file**. ALEX reads the local file and finds the sounds and animations referenced by its properties.
+6. The server only reuploads source assets for which Roblox's creator metadata confirms the **signed-in user** is the owner, and only if Roblox grants access to the actual media bytes. Assets owned by other users or groups (or unsupported/locked formats) are skipped, even if the .rbxl references them.
+7. After eligible uploads complete, ALEX automatically downloads `GAME_ALEX_REUPLOADED.rbxl` with successful ID replacements. Click **Download rebuilt .RBXL** if your browser blocks the automatic download. Check the changed game in Studio before publishing it yourself.
+
+The browser cannot rewrite a source asset it cannot legitimately retrieve. The original `.rbxl` is never modified. Rebuilt files are new copies, **not** automatically published live experiences. ALEX does not guarantee all asset IDs are replaceable: only supported serialized string properties and explicit asset references inside script sources are rewritten.
 
 The site file picker intentionally **does not** accept `.rbxlx`, `.rbxmx`, `.rbxm`, `.json` or `.csv`. Binary RBXL parsing is best-effort: unknown future property types or encrypted/non-standard serialization may not be recognized. The browser file-size limit is 150 MB.
-
-### Optional: Apply new IDs using the Studio plugin
-
-The included `studio/ALEX_REUPLOADER_PLUGIN.rbxmx` is a **Studio plugin**, not an executor script.
-
-1. Import the plugin into Roblox Studio as a local plugin.
-2. Open the toolbar's **ALEX Reuploader** panel.
-3. After completing authorized uploads on the website, copy the resulting `old_id=new_id` map from **Reupload queue**.
-4. Paste that map into the plugin's second text box, then click **APPLY ID MAP TO STUDIO**. Use Ctrl+Z in Studio to undo if needed.
-
-The plugin also includes advanced read-only project scanning tools. You can ignore them when using the website's `.rbxl` scanner.
 
 ## Gamepasses & usage
 
@@ -80,11 +75,11 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 
 - The app never downloads locked audio, animations, or assets from other creators to evade permission controls. It can't reconstruct original media from numeric asset IDs alone.
 - RBXL binary decoding is based on the [RobloxAPI binary format specification](https://github.com/RobloxAPI/spec/blob/master/formats/rbxl.md), with size limits and malformed-file checks. It does not execute script content from the file.
-- `Mesh` asset content is not generally uploadable from an arbitrary `.fbx` as type Mesh using the standard Assets API; use Studio Importer, then apply new references manually.
+- This automatic version supports audio and animation reupload only. Referenced meshes, images, or assets of other types remain unchanged.
 - Audio must meet Roblox's duration and upload quota limits; maximum media file size here is 20 MB.
-- A successful API request may return a processing operation. Wait for the new asset ID, then paste the map. Do not retry immediately if polling times out; verify on Creator Dashboard to avoid duplicates.
+- A successful API request may return a processing operation, which the website polls automatically. If polling times out, verify on Creator Dashboard before retrying to avoid duplicate uploads.
 - Signed-in sessions, rate counts, and OAuth state live in one process's memory. Deploy as **one Railway replica** for this version. Restarting the service logs users out and resets app counters. Before a full public launch, replace these with persistent server-side storage, and add account-specific throttles and abuse controls.
-- The plugin scans property-based `rbxassetid://...` or URL IDs it can access in the open Studio project. It doesn't read `ServerStorage`/`ServerScriptService` from other people's running games, doesn't enumerate Roblox's private Asset Manager database, and doesn't parse arbitrary IDs from scripts. The **scan and animation picker are read-only**; only **APPLY ID MAP** edits your open project.
+- The parser inspects only the local `.rbxl` supplied by its owner. It cannot read other users' private running-game server services or enumerate Roblox's private Asset Manager database.
 - Upload descriptions are intentionally disabled unless Ultra entitlement is server-verified.
 
 ## Official documentation
@@ -92,7 +87,6 @@ Pass ownership is verified using Roblox's public inventory ownership endpoint. I
 - [Roblox Open Cloud Asset API usage guide](https://create.roblox.com/docs/cloud/guides/usage-assets)
 - [Roblox OAuth implementation](https://create.roblox.com/docs/cloud/auth/oauth2-develop)
 - [Roblox OAuth reference](https://create.roblox.com/docs/cloud/auth/oauth2-reference)
-- [Roblox Studio plugin asset picker (Animation only)](https://create.roblox.com/docs/reference/engine/classes/Plugin/PromptForExistingAssetIdAsync)
-- [Roblox Studio file import](https://create.roblox.com/docs/reference/engine/classes/StudioService/PromptImportFileAsync)
+- [Roblox Open Cloud asset reference](https://create.roblox.com/docs/cloud/reference/features/assets)
 
 Roblox is a registered trademark of Roblox Corporation. ALEX Reuploader is an independent tool.

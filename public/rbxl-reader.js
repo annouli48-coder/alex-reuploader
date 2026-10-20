@@ -6,6 +6,7 @@ import { decompress as decompressZstd } from '../node_modules/fzstd/esm/index.mj
 
 const SIGNATURE = [0x3c, 0x72, 0x6f, 0x62, 0x6c, 0x6f, 0x78, 0x21, 0x89, 0xff, 0x0d, 0x0a, 0x1a, 0x0a];
 const textDecoder = new TextDecoder('utf-8');
+const textEncoder = new TextEncoder();
 
 class Reader {
   constructor(bytes) { this.bytes = bytes; this.offset = 0; this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); }
@@ -201,6 +202,138 @@ export function scanBinaryPlace(arrayBuffer) {
     }
   }
   return { items, format: 'RBXL', totalInstances: instances.size };
+}
+
+function bytesWithLength(value) {
+  const body = textEncoder.encode(value);
+  if (body.length > 20_000_000) throw new Error('A replacement RBXL string is too large.');
+  const bytes = new Uint8Array(body.length + 4);
+  new DataView(bytes.buffer).setUint32(0, body.length, true);
+  bytes.set(body, 4);
+  return bytes;
+}
+
+function combine(chunks) {
+  const length = chunks.reduce((sum, part) => sum + part.length, 0);
+  if (length > 300_000_000) throw new Error('The rebuilt RBXL would be too large.');
+  const result = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+  return result;
+}
+
+function rewriteMediaString(value, property, mapping) {
+  let replacements = 0;
+  const swap = (whole, id) => {
+    const next = mapping.get(id);
+    if (!next || next === id) return whole;
+    replacements++;
+    return whole.replace(id, next);
+  };
+  // In scripts, replace explicit asset references; never rewrite unrelated numbers.
+  let changed = value.replace(/rbxassetid:\/\/(\d{1,20})(?!\d)/gi, swap)
+    .replace(/https?:\/\/(?:www\.)?roblox\.com\/asset\/\?id=(\d{1,20})(?!\d)/gi, swap);
+  if (property === 'Source') {
+    changed = changed.replace(/((?:SoundId|AnimationId)\s*=\s*['"])(\d{1,20})(['"])/gi, (whole, before, id, after) => {
+      const next = mapping.get(id);
+      if (!next || next === id) return whole;
+      replacements++;
+      return `${before}${next}${after}`;
+    });
+  } else if (/^\d{1,20}$/.test(changed)) {
+    const next = mapping.get(changed);
+    if (next && next !== changed) { changed = next; replacements++; }
+  }
+  return { value: changed, replacements };
+}
+
+const REWRITE_PROPERTIES = new Set(['SoundId', 'AnimationId', 'Asset', 'AssetId', 'Value', 'Source']);
+
+/**
+ * Return a new, Studio-openable binary place with selected asset references
+ * rewritten. Unknown chunks and unmodified property bytes are preserved.
+ * Rewritten property chunks are stored uncompressed, a valid RBXL encoding.
+ */
+export function rewriteBinaryPlace(arrayBuffer, idMapping) {
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length < 32 || !SIGNATURE.every((b, i) => bytes[i] === b)) {
+    throw new Error('Choose an original binary .rbxl file to rebuild.');
+  }
+  const mapping = new Map(Object.entries(idMapping || {}).filter(([oldId, newId]) =>
+    /^\d{1,20}$/.test(oldId) && /^\d{1,20}$/.test(String(newId)) && String(newId) !== oldId)
+    .map(([oldId, newId]) => [oldId, String(newId)]));
+  const reader = new Reader(bytes);
+  reader.take(SIGNATURE.length);
+  if (reader.u16() !== 0) throw new Error('Unsupported RBXL format version.');
+  const classCount = reader.u32(), instanceCount = reader.u32();
+  reader.take(8);
+  if (classCount > 10_000 || instanceCount > 2_000_000) throw new Error('RBXL is larger than the safe limit.');
+  const output = [bytes.subarray(0, reader.offset)];
+  const counts = new Map();
+  let changedProperties = 0, replacedReferences = 0, ended = false;
+  const changedIds = new Set();
+
+  for (let chunkNumber = 0; reader.offset < bytes.length && chunkNumber < 500_000; chunkNumber++) {
+    const from = reader.offset;
+    const kind = reader.fixedText(4);
+    const compressedSize = reader.u32(), uncompressedSize = reader.u32();
+    reader.take(4);
+    if (compressedSize > 80_000_000 || uncompressedSize > 64_000_000) throw new Error('RBXL chunk is too large.');
+    const data = compressedSize ? decompressChunk(reader.take(compressedSize), uncompressedSize) : reader.take(uncompressedSize);
+    const original = bytes.subarray(from, reader.offset);
+    if (kind === 'INST') {
+      const inst = new Reader(data);
+      const classId = inst.i32(); inst.string(); inst.u8();
+      counts.set(classId, inst.u32());
+    }
+    if (kind !== 'PROP' || !mapping.size) {
+      output.push(original);
+    } else {
+      const prop = new Reader(data);
+      const classId = prop.i32(), name = prop.string(), type = prop.u8();
+      const count = counts.get(classId);
+      if (type !== 1 || !REWRITE_PROPERTIES.has(name) || count === undefined) {
+        output.push(original);
+      } else {
+        const prefix = data.subarray(0, prop.offset);
+        const pieces = [prefix];
+        let replacementsInChunk = 0;
+        for (let i = 0; i < count; i++) {
+          const stringFrom = prop.offset;
+          const length = prop.u32();
+          if (length > 20_000_000) throw new Error('RBXL contains a property string that is too large.');
+          const value = textDecoder.decode(prop.take(length));
+          const changed = rewriteMediaString(value, name, mapping);
+          if (changed.replacements) {
+            pieces.push(bytesWithLength(changed.value));
+            replacementsInChunk += changed.replacements;
+            for (const [oldId, newId] of mapping) if (value.includes(oldId) && changed.value.includes(newId)) changedIds.add(oldId);
+          } else {
+            pieces.push(data.subarray(stringFrom, prop.offset));
+          }
+        }
+        // Preserve any future extension bytes on a string property.
+        pieces.push(data.subarray(prop.offset));
+        if (!replacementsInChunk) {
+          output.push(original);
+        } else {
+          const decoded = combine(pieces);
+          const header = Uint8Array.from(original.subarray(0, 16));
+          const view = new DataView(header.buffer);
+          view.setUint32(4, 0, true); // Uncompressed property payload.
+          view.setUint32(8, decoded.length, true);
+          output.push(header, decoded);
+          changedProperties++;
+          replacedReferences += replacementsInChunk;
+        }
+      }
+    }
+    if (kind === 'END\0' || kind === 'END.') { ended = true; break; }
+  }
+  if (!ended) throw new Error('The RBXL file is missing its closing chunk.');
+  // Preserve bytes beyond END, if any, rather than silently discarding data.
+  output.push(bytes.subarray(reader.offset));
+  return { buffer: combine(output).buffer, changedProperties, replacedReferences, changedAssetIds: [...changedIds] };
 }
 
 // Exported for deterministic test fixtures; no file writes are performed.

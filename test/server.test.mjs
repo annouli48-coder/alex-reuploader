@@ -143,3 +143,61 @@ test('second owner account receives Ultra without a game pass', async () => {
     assert.equal(me.allowance.limit, 100);
   }, mock);
 });
+
+test('automatic account-owned audio reupload retrieves permitted content and creates an operation', async () => {
+  let uploads = 0;
+  const mock = async (url, options = {}) => {
+    if (url.endsWith('/token')) return new Response(JSON.stringify({ access_token: 'owned-asset-token', expires_in: 900 }), { status: 200 });
+    if (url.endsWith('/userinfo')) return new Response(JSON.stringify({ sub: '9140908042', preferred_username: 'Alex' }), { status: 200 });
+    if (url.endsWith('/assets/v1/assets/123456')) return Response.json({ assetType: 'ASSET_TYPE_AUDIO', creationContext: { creator: { userId: '9140908042' } } });
+    if (url.endsWith('/asset-delivery-api/v1/assetId/123456')) return Response.json({ location: 'https://cdn.rbxcdn.com/owned-original' });
+    if (url === 'https://cdn.rbxcdn.com/owned-original') return new Response(Buffer.from('OggSauthorized original audio'));
+    if (url.endsWith('/assets/v1/assets') && options.method === 'POST') {
+      uploads++;
+      const form = options.body;
+      const info = JSON.parse(form.get('request'));
+      assert.equal(info.creationContext.creator.userId, '9140908042');
+      assert.equal(info.assetType, 'Audio');
+      assert.equal(form.get('fileContent').type, 'audio/ogg');
+      return Response.json({ path: 'operations/auto_123' });
+    }
+    if (url.endsWith('/operations/auto_123')) return Response.json({ done: true, response: { assetId: '999999' } });
+    throw new Error(`Unexpected upstream call: ${url}`);
+  };
+  await withApp(async url => {
+    const start = await fetch(`${url}/auth/start`, { redirect: 'manual' });
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const callback = await fetch(`${url}/auth/callback?code=code&state=${state}`, { redirect: 'manual', headers: { cookie: start.headers.get('set-cookie').split(';')[0] } });
+    const cookie = callback.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    const me = await (await fetch(`${url}/api/me`, { headers: { cookie } })).json();
+    const payload = { oldId: '123456', assetType: 'Audio', displayName: 'Theme', rightsConfirmed: true };
+    const auto = await fetch(`${url}/api/auto-reupload`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-alex-csrf': me.csrf }, body: JSON.stringify(payload) });
+    assert.equal(auto.status, 202);
+    assert.equal((await auto.json()).operation, 'auto_123');
+    assert.equal(uploads, 1);
+    const repeated = await fetch(`${url}/api/auto-reupload`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-alex-csrf': me.csrf }, body: JSON.stringify(payload) });
+    assert.equal(repeated.status, 202);
+    assert.equal(uploads, 1, 'automatic retries should not duplicate Roblox uploads');
+  }, mock);
+});
+
+test('automatic reupload refuses assets not verified as owned by the signed-in account', async () => {
+  let contentRequested = false;
+  const mock = async url => {
+    if (url.endsWith('/token')) return Response.json({ access_token: 'only-owner-content', expires_in: 900 });
+    if (url.endsWith('/userinfo')) return Response.json({ sub: '9140908042', preferred_username: 'Alex' });
+    if (url.endsWith('/assets/v1/assets/456789')) return Response.json({ assetType: 'ASSET_TYPE_ANIMATION', creationContext: { creator: { userId: '87654321' } } });
+    contentRequested = true;
+    throw new Error(`Should never fetch unowned source: ${url}`);
+  };
+  await withApp(async url => {
+    const start = await fetch(`${url}/auth/start`, { redirect: 'manual' });
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const callback = await fetch(`${url}/auth/callback?code=code&state=${state}`, { redirect: 'manual', headers: { cookie: start.headers.get('set-cookie').split(';')[0] } });
+    const cookie = callback.headers.get('set-cookie').match(/alex_sid=[^;]+/)[0];
+    const me = await (await fetch(`${url}/api/me`, { headers: { cookie } })).json();
+    const denied = await fetch(`${url}/api/auto-reupload`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-alex-csrf': me.csrf }, body: JSON.stringify({ oldId: '456789', assetType: 'Animation', rightsConfirmed: true }) });
+    assert.equal(denied.status, 403);
+    assert.equal(contentRequested, false);
+  }, mock);
+});

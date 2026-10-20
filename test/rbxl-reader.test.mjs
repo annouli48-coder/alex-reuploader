@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RBXL_SIGNATURE, scanBinaryPlace } from '../public/rbxl-reader.js';
+import { RBXL_SIGNATURE, scanBinaryPlace, rewriteBinaryPlace } from '../public/rbxl-reader.js';
 
 const enc = new TextEncoder();
 const u32 = number => [number & 255, (number >>> 8) & 255, (number >>> 16) & 255, (number >>> 24) & 255];
@@ -70,6 +70,47 @@ test('decodes modern Zstandard and mixed Zstandard/LZ4 RBXL chunks', () => {
     assert.equal(result.items[0].assetId, '123456789');
     assert.equal(result.items[0].path, 'Theme');
   }
+});
+
+test('rewrites LZ4 and Zstandard property chunks and keeps source file untouched', () => {
+  for (const zstd of [false, true]) {
+    const original = samplePlace(true, zstd);
+    const inputSnapshot = Uint8Array.from(original);
+    const updated = rewriteBinaryPlace(original.buffer, { 123456789: '987654321' });
+    assert.equal(updated.changedProperties, 1);
+    assert.equal(updated.replacedReferences, 1);
+    assert.deepEqual(updated.changedAssetIds, ['123456789']);
+    assert.equal(scanBinaryPlace(updated.buffer).items[0].assetId, '987654321');
+    assert.deepEqual(original, inputSnapshot, 'original game bytes must not change');
+  }
+});
+
+test('does not rewrite unrelated properties or numbers without an exact asset match', () => {
+  const original = samplePlace(true, true);
+  const rebuilt = rewriteBinaryPlace(original.buffer, { 12345678: '999', 777: '888' });
+  assert.equal(rebuilt.replacedReferences, 0);
+  assert.deepEqual(new Uint8Array(rebuilt.buffer), original, 'no matching IDs should preserve all input bytes');
+});
+
+test('replaces recognized asset URLs in script source without modifying other numbers', () => {
+  const inst = [...u32(3), ...string('Script'), 0, ...u32(1), ...refArray([1])];
+  const name = [...u32(3), ...string('Name'), 1, ...string('Logic')];
+  const lua = 's.SoundId="rbxassetid://123456789"; print(123456789); a.AnimationId="123456789"';
+  const source = [...u32(3), ...string('Source'), 1, ...string(lua)];
+  const prnt = [0, ...u32(1), ...refArray([1]), ...refArray([-1])];
+  const bytes = Uint8Array.from([
+    ...RBXL_SIGNATURE, 0, 0, ...u32(1), ...u32(1), ...new Array(8).fill(0),
+    ...chunk('INST', inst), ...chunk('PROP', name), ...chunk('PROP', source),
+    ...chunk('PRNT', prnt), ...chunk('END\0', word('</roblox>')),
+  ]);
+  const updated = rewriteBinaryPlace(bytes.buffer, { 123456789: '999888777' });
+  const before = scanBinaryPlace(bytes.buffer).items;
+  const after = scanBinaryPlace(updated.buffer).items;
+  assert.equal(before.length, 1, 'original scanner only recognizes URI-typed script IDs');
+  assert.equal(after[0].assetId, '999888777');
+  // The incidental print value is untouched in the rebuilt binary.
+  assert.equal(Buffer.from(updated.buffer).includes(Buffer.from('print(123456789)')), true);
+  assert.equal(Buffer.from(updated.buffer).includes(Buffer.from('a.AnimationId="999888777"')), true);
 });
 
 test('refuses non-RBXL data and truncated RBXL chunks', () => {
