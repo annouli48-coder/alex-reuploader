@@ -51,6 +51,11 @@ test('only extracts context-identified sound and animation IDs from scripts', ()
   ]);
 });
 
+test('legacy script reference extraction also has no 300-item cutoff', () => {
+  const script = Array.from({ length: 450 }, (_, i) => `x.SoundId='rbxassetid://${1_000_000 + i}'`).join('\n');
+  assert.equal(extractMediaReferencesFromScript(script).length, 450);
+});
+
 async function withApp(fn, fetcher = async () => { throw new Error('Unexpected outbound request'); }) {
   const app = createApp({ env: { PUBLIC_BASE_URL: 'http://localhost:3000', ROBLOX_OAUTH_CLIENT_ID: 'test-client', ROBLOX_OAUTH_CLIENT_SECRET: 'test-secret' }, fetcher });
   const server = http.createServer(app);

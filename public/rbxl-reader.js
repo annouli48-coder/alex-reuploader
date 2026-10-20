@@ -125,10 +125,8 @@ function scriptReferences(source) {
   const known = /(SoundId|AnimationId|MeshId|TextureID|Image|Video|Asset|ColorMap|NormalMap|MetalnessMap|RoughnessMap)\s*=\s*['"]?(?:rbxassetid:\/\/|https?:\/\/(?:www\.)?roblox\.com\/asset\/\?id=)(\d{1,20})/gi;
   const seen = new Set();
   for (const match of value.matchAll(known)) {
-    const key = `${match.index}:${match[2]}`;
     seen.add(match[2]);
     result.push({ className: assetClass(match[1], 'UnknownAsset'), assetId: match[2] });
-    if (result.length >= 400) return result;
   }
   const urls = /rbxassetid:\/\/(\d{1,20})|https?:\/\/(?:www\.)?roblox\.com\/asset\/\?id=(\d{1,20})|Content\.fromAssetId\(\s*(\d{1,20})\s*\)/gi;
   for (const match of value.matchAll(urls)) {
@@ -137,7 +135,6 @@ function scriptReferences(source) {
       result.push({ className: 'UnknownAsset', assetId });
       seen.add(assetId);
     }
-    if (result.length >= 400) break;
   }
   return result;
 }
@@ -219,7 +216,6 @@ export function scanBinaryPlace(arrayBuffer) {
   const items = [];
   const append = (instance, id, property, assetId, className = instance.className, source = 'Instance') => {
     if (!assetId || assetId === '0') return;
-    if (items.length >= 30_000) throw new Error('Over 30,000 media references. Scan a smaller place file.');
     items.push({ name: instance.properties.Name || instance.className, path: pathFor(id), className, property, assetId, source });
   };
   for (const [id, instance] of instances) {

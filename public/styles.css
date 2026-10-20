@@ -15,6 +15,8 @@
 /* Five scan metrics, with comfortable wrapping on narrower screens. */
 .insights-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
 @media(max-width:960px){.insights-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.asset-list-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}
+.asset-list-footer .quiet{font-size:11px;color:#aa99c2}
 /* Service and folder drill-down for imported references. */
 .location-list{display:block;max-height:390px;overflow:auto;padding:5px 2px}.location-branch{margin-bottom:6px}.location-branch summary{cursor:pointer;list-style-position:inside}.location-branch summary::marker{color:#bca0f1}.location-children{margin:6px 0 0 18px;padding-left:10px;border-left:1px solid #49365e}.location-children>.location-row{margin:5px 0}.location-leaf{background:#171320}
 @media(max-width:700px){.insights-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}

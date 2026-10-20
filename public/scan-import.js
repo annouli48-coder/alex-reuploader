@@ -10,7 +10,6 @@ export function extractMediaReferencesFromScript(source) {
   const explicit = /(SoundId|AnimationId)\s*=\s*['"]?(?:rbxassetid:\/\/|https?:\/\/www\.roblox\.com\/asset\/\?id=)(\d{1,20})/gi;
   for (const match of String(source).matchAll(explicit)) {
     references.push({ className: match[1].toLowerCase() === 'soundid' ? 'Sound' : 'Animation', assetId: match[2] });
-    if (references.length >= 300) break;
   }
   return references;
 }
@@ -115,7 +114,6 @@ function xmlToManifest(raw) {
       const type = /sound|audio/.test(location) ? 'Sound' : /anim/.test(location) ? 'Animation' : null;
       if (id && type) items.push({ className: type, name, property: 'Value (read only)', assetId: id, path, source: 'Value' });
     }
-    if (items.length > 30000) throw new Error('The XML contains over 30,000 media references. Export a smaller file.');
   }
   return { items };
 }

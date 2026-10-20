@@ -1,4 +1,4 @@
-# ALEX Reuploader — Multi-Asset RBXL Rebuild V9 (login repair)
+# ALEX Reuploader — Multi-Asset RBXL Rebuild V10 (large scans)
 
 Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, account-owned media reupload automation, and browser-based `.rbxl` rewriting. Railway-ready and no Studio plugin needed for the automatic workflow.
 
@@ -6,6 +6,7 @@ Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-f
 
 - The website file picker accepts **only `.rbxl`** Roblox place files (binary format). It reads the file locally in the browser, finds common audio, animation, image, decal, texture, mesh, model, and video ID references, and displays location counts and asset-ID lists. The place file is never uploaded to ALEX.
 - The `.rbxl` parser handles modern Zstandard (ZSTD), legacy LZ4, and uncompressed chunks, including mixed-compression files. It recognizes explicit asset URLs and `Content.fromAssetId` references embedded in scripts, alongside a broad set of external-asset properties and value objects serialized as strings.
+- **No arbitrary 30,000-reference scan cutoff.** Large files are scanned for all recognized references within the 150 MB browser file-size and safe binary-format processing limits. The asset table displays 250 records at a time with a Show More button, while searching, reference counts, mappings, and reuploads use the full detected list.
 - After sign-in, users can explicitly opt into automatic reuploads. Selecting an `.rbxl` triggers a sequential attempt to retrieve each scanned external asset using Roblox OAuth. The backend checks creator metadata: source assets must belong to the signed-in user or to the selected destination group, and Roblox must authorize both reading the original and creating a replacement. Missing, private, unrecognized, or denied media are skipped. The UI has a stop button for long scans.
 - Successful uploads are mapped and rewritten directly into a **new** `.rbxl` file. The download starts after the automatic pass; a manual download button is also available. Unmodified RBXL chunks are preserved, while changed property chunks are encoded uncompressed. The original place file is never altered or uploaded to ALEX.
 - No Studio plugin or manual `old_id=new_id` mapping is required or offered by the website.
@@ -16,6 +17,7 @@ Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-f
 - Poll Roblox's asset operation to obtain each new asset ID; then download the newly rebuilt `.rbxl` with the matching asset references automatically rewritten. There is no separate media-upload form or mapping step on the website.
 - Verify the configured Roblox gamepasses server-side. Owner accounts `9140908042` and `10290256654` receive Ultra; other users receive their highest verified pass. Ultra adds custom asset descriptions.
 - Browser keeps the scan and successful mappings locally (no source media stored by the app). Media is sent to Roblox on upload.
+- A large scan is kept in the current browser tab. If its item list is too large for small localStorage quotas, ALEX saves its ID mappings but asks you to choose the same `.rbxl` again after a refresh instead of silently restoring only the first 10,000 IDs.
 
 ## Run locally
 
@@ -56,6 +58,7 @@ Open `http://localhost:3000`. You can scan an `.rbxl` without OAuth credentials.
 3. Open the ALEX website and **Sign in with Roblox**.
 4. Go to **Asset scanner**. For hands-free eligible source uploads, check **Automatically reupload my own assets**. Choosing this option explicitly authorizes new Roblox uploads, which consume Roblox upload quotas.
 5. Click **Choose .RBXL file**. ALEX reads the local file and finds external asset references across common string-encoded properties and scripts. A large file may contain thousands of references; the sequential upload pass is limited by plan quota and can be stopped.
+   Scanning has no fixed asset-reference count cap. The app still has practical file, instance, decompression, and browser-memory safety limits. Scanning and actually uploading assets are separate operations: Ultra allows up to 100 accepted app uploads per day, not unlimited Roblox uploads.
 6. The server only reuploads source assets for which Roblox's creator metadata confirms the **signed-in user or selected group** owns the asset, and only if Roblox grants access to the actual media bytes. Assets owned by unrelated creators, unsupported categories, and inaccessible formats are skipped, even if the .rbxl references them.
 7. After eligible uploads complete, ALEX automatically downloads `GAME_ALEX_REUPLOADED.rbxl` with successful ID replacements. Click **Download rebuilt .RBXL** if your browser blocks the automatic download. Check the changed game in Studio before publishing it yourself.
 

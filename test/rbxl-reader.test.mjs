@@ -6,6 +6,12 @@ const enc = new TextEncoder();
 const u32 = number => [number & 255, (number >>> 8) & 255, (number >>> 16) & 255, (number >>> 24) & 255];
 const string = value => [...u32(enc.encode(value).length), ...enc.encode(value)];
 const word = value => [...enc.encode(value)];
+const concatBytes = parts => {
+  const bytes = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) { bytes.set(part, offset); offset += part.length; }
+  return bytes;
+};
 const refArray = ids => {
   let previous = 0;
   const zigzags = ids.map(id => {
@@ -145,6 +151,26 @@ test('recognizes Content.fromAssetId without rewriting unrelated script numbers'
   const rebuilt = rewriteBinaryPlace(bytes.buffer, { 771144: '991177' });
   assert.equal(Buffer.from(rebuilt.buffer).includes(Buffer.from('Content.fromAssetId(991177)')), true);
   assert.equal(Buffer.from(rebuilt.buffer).includes(Buffer.from('print(771144)')), true);
+});
+
+test('scans over 30,000 separate RBXL asset references without an artificial cutoff', () => {
+  const count = 30_125;
+  const scriptText = Array.from({ length: count }, (_, i) => `s.SoundId="rbxassetid://${80_000_000 + i}"`).join('\n');
+  const encodedScript = enc.encode(scriptText);
+  const inst = Uint8Array.from([...u32(3), ...string('Script'), 0, ...u32(1), ...refArray([1])]);
+  const sourcePrefix = Uint8Array.from([...u32(3), ...string('Source'), 1, ...u32(encodedScript.length)]);
+  const source = concatBytes([sourcePrefix, encodedScript]);
+  const prnt = Uint8Array.from([0, ...u32(1), ...refArray([1]), ...refArray([-1])]);
+  const chunkBytes = (type, content) => concatBytes([Uint8Array.from([...word(type), ...u32(0), ...u32(content.length), 0, 0, 0, 0]), content]);
+  const place = concatBytes([
+    Uint8Array.from([...RBXL_SIGNATURE, 0, 0, ...u32(1), ...u32(1), ...new Array(8).fill(0)]),
+    chunkBytes('INST', inst), chunkBytes('PROP', source), chunkBytes('PRNT', prnt),
+    chunkBytes('END\0', Uint8Array.from(word('</roblox>'))),
+  ]);
+  const result = scanBinaryPlace(place.buffer);
+  assert.equal(result.items.length, count);
+  assert.equal(result.items[0].assetId, '80000000');
+  assert.equal(result.items.at(-1).assetId, String(80_000_000 + count - 1));
 });
 
 test('refuses non-RBXL data and truncated RBXL chunks', () => {

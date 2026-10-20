@@ -3,24 +3,46 @@ import { scanBinaryPlace, rewriteBinaryPlace } from './rbxl-reader.js';
 
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
-const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false, stopRequested: false };
+const ASSET_PAGE_SIZE = 250;
+const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false, stopRequested: false, visibleAssetRows: ASSET_PAGE_SIZE, snapshotNotSaved: false };
 
 function loadSaved() {
   try {
     const data = JSON.parse(localStorage.getItem(STORE) || '{}');
-    if (data.scanFormat === 'rbxl' && Array.isArray(data.items)) state.items = data.items.filter(x => /^\d+$/.test(x.id)).slice(0, 10000);
+    if (data.scanFormat === 'rbxl' && Array.isArray(data.items)) state.items = data.items.filter(x => /^\d+$/.test(x.id));
     if (data.mapping && typeof data.mapping === 'object') {
       for (const [oldId, newId] of Object.entries(data.mapping)) if (/^\d+$/.test(oldId) && /^\d+$/.test(String(newId))) state.mapping[oldId] = String(newId);
     }
     if (data.scanFormat === 'rbxl') {
-      state.scanCount = Number(data.scanCount) || 0;
-      if (data.insights && typeof data.insights === 'object') state.insights = data.insights;
+      state.snapshotNotSaved = data.savedWithoutItems === true;
+      state.scanCount = state.snapshotNotSaved ? 0 : Number(data.scanCount) || 0;
+      if (!state.snapshotNotSaved && data.insights && typeof data.insights === 'object') state.insights = data.insights;
       state.placeFingerprint = String(data.placeFingerprint || '');
     }
   } catch { /* Browser storage may be empty or inaccessible. */ }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ scanFormat: 'rbxl', items: state.items, mapping: state.mapping, scanCount: state.scanCount, insights: state.insights, placeFingerprint: state.placeFingerprint })); } catch { toast('Could not save to this browser. Download your updated place before closing.'); }
+  const summary = { scanFormat: 'rbxl', mapping: state.mapping, scanCount: state.scanCount, insights: state.insights, placeFingerprint: state.placeFingerprint };
+  try {
+    // Browser localStorage is usually only a few MB. Keep huge scans in this
+    // tab instead of silently truncating them to a misleading partial list.
+    if (state.items.length <= 5000) {
+      const snapshot = JSON.stringify({ ...summary, items: state.items, savedWithoutItems: false });
+      if (snapshot.length < 3_000_000) {
+        localStorage.setItem(STORE, snapshot);
+        state.snapshotNotSaved = false;
+        return true;
+      }
+    }
+    localStorage.setItem(STORE, JSON.stringify({ ...summary, items: [], savedWithoutItems: true }));
+    state.snapshotNotSaved = true;
+    return false;
+  } catch {
+    state.snapshotNotSaved = true;
+    try { localStorage.setItem(STORE, JSON.stringify({ ...summary, items: [], savedWithoutItems: true })); }
+    catch { /* Storage disabled or full; the in-memory scan still works. */ }
+    return false;
+  }
 }
 function toast(message) {
   const target = $('toast'); target.textContent = message; target.classList.add('visible');
@@ -40,7 +62,6 @@ function typeOf(item) {
 }
 function parseScan(doc) {
   if (!doc || !Array.isArray(doc.items)) throw new Error('Expected a scan with an "items" array.');
-  if (doc.items.length > 30000) throw new Error('Scan is too large (maximum 30,000 references). Select a smaller section in Studio.');
   const byId = new Map();
   const byLocation = new Map();
   const insights = { audio: 0, animation: 0, other: 0, scripts: 0, values: 0, locations: [] };
@@ -68,7 +89,7 @@ function parseScan(doc) {
   }
   if (doc.items.length && byId.size === 0) throw new Error('The scan has no valid Roblox asset IDs.');
   insights.locations = [...byLocation.entries()].sort((a, b) => b[1] - a[1]).slice(0, 350);
-  state.items = [...byId.values()]; state.scanCount = doc.items.length; state.insights = insights;
+  state.items = [...byId.values()]; state.scanCount = doc.items.length; state.insights = insights; state.visibleAssetRows = ASSET_PAGE_SIZE;
   if (doc.groupId && /^\d+$/.test(String(doc.groupId))) $('groupId').value = String(doc.groupId);
   save(); render();
   return `Imported ${state.scanCount} references across ${state.items.length} unique IDs.`;
@@ -91,7 +112,11 @@ function renderAssets() {
   const listed = state.items.filter(item => (type === 'all' || item.type === type || (type === 'Decal' && item.type === 'Image')) && (item.id.includes(filter) || item.name.toLowerCase().includes(filter) || item.path.toLowerCase().includes(filter)));
   const tbody = $('assetTable'); tbody.replaceChildren();
   $('assetsEmpty').classList.toggle('hidden', listed.length > 0);
-  for (const item of listed) {
+  const showing = Math.min(listed.length, state.visibleAssetRows);
+  $('assetListSummary').textContent = `Showing ${showing.toLocaleString()} of ${listed.length.toLocaleString()} matching asset IDs. Every detected ID is included in the scan.`;
+  $('moreAssets').classList.toggle('hidden', showing === listed.length);
+  const fragment = document.createDocumentFragment();
+  for (const item of listed.slice(0, showing)) {
     const tr = node('tr');
     const name = node('td'); name.append(node('strong', '', item.name), node('small', '', `${item.path} • ${item.id}`));
     const kind = node('td'); kind.append(node('span', `type-tag ${item.type.toLowerCase()}`, item.type === 'Manual' ? 'Manual only' : item.type));
@@ -99,8 +124,9 @@ function renderAssets() {
     const newId = node('td'); const mapped = state.mapping[item.id]; newId.append(node('code', '', mapped || '—'));
     const actions = node('td');
     actions.append(node('span', 'quiet', mapped ? 'Ready' : 'Check ownership'));
-    tr.append(name, kind, refs, newId, actions); tbody.append(tr);
+    tr.append(name, kind, refs, newId, actions); fragment.append(tr);
   }
+  tbody.append(fragment);
 }
 function renderQueue() {
   const list = $('mappingList'); list.replaceChildren();
@@ -291,13 +317,15 @@ $('manifestFile').addEventListener('change', async event => {
     state.placeFingerprint = fingerprint;
     state.totalInstances = result.totalInstances;
     const message = parseScan(result);
-    $('scanStatus').textContent = `${result.totalInstances.toLocaleString()} instances examined. ${message}`;
+    $('scanStatus').textContent = `${result.totalInstances.toLocaleString()} instances examined. ${message}${state.snapshotNotSaved ? ' This large scan stays in this tab; choose the file again after a refresh.' : ''}`;
     toast(message);
     if ($('autoMode').checked) await autoReuploadScanned();
   } catch (e) { $('scanStatus').textContent = e.message; toast(e.message); }
   finally { event.target.value = ''; }
 });
-$('filterAsset').addEventListener('input', renderAssets); $('typeFilter').addEventListener('change', renderAssets);
+function resetAssetPage() { state.visibleAssetRows = ASSET_PAGE_SIZE; renderAssets(); }
+$('filterAsset').addEventListener('input', resetAssetPage); $('typeFilter').addEventListener('change', resetAssetPage);
+$('moreAssets').addEventListener('click', () => { state.visibleAssetRows += ASSET_PAGE_SIZE; renderAssets(); });
 $('publishGroup').addEventListener('change', () => $('groupField').classList.toggle('hidden', !$('publishGroup').checked));
 $('stopAuto').addEventListener('click', () => { state.stopRequested = true; $('autoProgress').textContent = 'Stopping after the current asset request…'; });
 $('copyMapping').addEventListener('click', downloadFixedPlace); $('copyMappingTop').addEventListener('click', downloadFixedPlace); $('downloadFixed').addEventListener('click', downloadFixedPlace);
@@ -310,3 +338,4 @@ Promise.all([api('/api/config'), api('/api/me')]).then(([config, me]) => {
 loadSaved();
 try { render(); }
 catch (error) { console.error('ALEX saved-scan display failed:', error); toast('Could not display the saved scan. Sign-in is still available.'); }
+if (state.snapshotNotSaved) $('scanStatus').textContent = 'Your last scan was too large to keep in browser storage. Choose the same .rbxl again to restore the full asset list.';
