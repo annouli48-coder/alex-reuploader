@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { BackgroundStore, createBackgroundWorker } from './background-jobs.mjs';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -84,6 +85,18 @@ async function getMultipart(req) {
 async function remoteJson(response) {
   const str = await response.text();
   try { return JSON.parse(str); } catch { return { error: str.slice(0, 350) }; }
+}
+
+async function bulkJobBody(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 6 * 1024 * 1024) throw new HttpError(413, 'Asset queue exceeds the 6 MB request limit.');
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw new HttpError(400, 'Invalid asset queue JSON.'); }
 }
 
 async function smallJsonBody(req) {
@@ -175,6 +188,10 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
   const states = new Map();
   const daily = new Map();
   const autoPending = new Map();
+  const jobPath = env.ALEX_JOB_DB_PATH ||
+    (env.RAILWAY_VOLUME_MOUNT_PATH ? join(env.RAILWAY_VOLUME_MOUNT_PATH, 'alex-reuploader-jobs.sqlite') : '');
+  const backgroundStore = jobPath ? new BackgroundStore(jobPath) : null;
+
 
   function sealSession(session) {
     const nonce = randomBytes(12);
@@ -190,7 +207,18 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
       if (bytes.length < 29) return null;
       const decipher = createDecipheriv('aes-256-gcm', sessionKey, bytes.subarray(0, 12));
       decipher.setAuthTag(bytes.subarray(12, 28));
-      const session = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+      let session = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+      // Worker refreshes can rotate OAuth tokens while a browser is closed.
+      // Reconcile an already-valid browser session with its newer persisted copy.
+      const current = backgroundStore?.latestSession(session.userId,session.sid);
+      if (current && current.sealed_cookie !== value) {
+        try {
+          const fresh = Buffer.from(current.sealed_cookie,'base64url');
+          const dec = createDecipheriv('aes-256-gcm', sessionKey, fresh.subarray(0,12));
+          dec.setAuthTag(fresh.subarray(12,28));
+          session = JSON.parse(Buffer.concat([dec.update(fresh.subarray(28)), dec.final()]).toString('utf8'));
+        } catch { /* original cookie still undergoes normal validation */ }
+      }
       if (!session || typeof session !== 'object' || !/^[0-9]+$/.test(session.userId) ||
           typeof session.sid !== 'string' || !session.sid || typeof session.csrf !== 'string' ||
           !Number.isFinite(session.validUntil) || session.validUntil < Date.now() ||
@@ -199,7 +227,9 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
     } catch { return null; }
   }
   function writeSession(res, session) {
-    res.setHeader('set-cookie', cookieFor(sealSession(session), secure));
+    const sealed = sealSession(session);
+    backgroundStore?.rememberSession(session,sealed);
+    res.setHeader('set-cookie', cookieFor(sealed, secure));
   }
   function requireUser(req) {
     const session = sessionOf(req);
@@ -252,18 +282,27 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
   function available(session, tier) {
     const day = new Date().toISOString().slice(0, 10);
     const tally = daily.get(session.userId);
-    const used = tally?.day === day ? tally.used : 0;
+    const used = backgroundStore ? backgroundStore.used(session.userId,day) : (tally?.day === day ? tally.used : 0);
     return { used, limit: LIMITS[tier], day };
   }
 
-  return async function app(req, res) {
+  function chargeUsage(session, quota, tier) {
+    if (backgroundStore) {
+      if (!backgroundStore.charge(session.userId, quota.day, LIMITS[tier]))
+        throw new HttpError(429, 'Daily ALEX upload allowance reached.');
+    } else {
+      daily.set(session.userId, { day: quota.day, used: quota.used + 1 });
+    }
+  }
+
+  const app = async function app(req, res) {
     const pathname = new URL(req.url || '/', origin).pathname;
     try {
       res.setHeader('x-frame-options', 'DENY');
       res.setHeader('referrer-policy', 'no-referrer');
       res.setHeader('content-security-policy', "default-src 'self'; img-src 'self' https://*.rbxcdn.com data:; connect-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'");
       if (pathname === '/healthz') return json(res, 200, { ok: true });
-      if (pathname === '/api/config') return json(res, 200, { ready: configured, groupId: DEFAULT_GROUP, passes: PASSES.map((id, i) => ({ id, name: PASS_NAMES[i] })), maxFileMiB: 20 });
+      if (pathname === '/api/config') return json(res, 200, { backgroundReady: !!backgroundStore, ready: configured, groupId: DEFAULT_GROUP, passes: PASSES.map((id, i) => ({ id, name: PASS_NAMES[i] })), maxFileMiB: 20 });
       if (pathname === '/api/me') {
         const session = sessionOf(req);
         if (!session) return json(res, 200, { loggedIn: false });
@@ -302,15 +341,69 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         const profile = await remoteJson(profileResponse);
         if (!profileResponse.ok || !/^\d+$/.test(String(profile.sub))) throw new HttpError(502, 'Could not verify the Roblox account.');
         const session = { sid: token(), userId: String(profile.sub), name: String(profile.preferred_username || profile.name || 'Creator'), picture: typeof profile.picture === 'string' ? profile.picture : '', access: result.access_token, refresh: result.refresh_token || '', expiresAt: Date.now() + (Number(result.expires_in) || 900) * 1000, csrf: token(), tier: 0, tierValidUntil: 0, validUntil: Date.now() + SESSION_LIFETIME };
-        res.setHeader('set-cookie', [`alex_oauth=; HttpOnly; SameSite=Lax; Path=/auth/callback; Max-Age=0; ${secure ? 'Secure' : ''}`, cookieFor(sealSession(session), secure)]);
+        const sealed = sealSession(session);
+        backgroundStore?.rememberSession(session,sealed);
+        res.setHeader('set-cookie', [`alex_oauth=; HttpOnly; SameSite=Lax; Path=/auth/callback; Max-Age=0; ${secure ? 'Secure' : ''}`, cookieFor(sealed, secure)]);
         return redirect(res, '/');
       }
       if (pathname === '/auth/logout' && req.method === 'POST') {
         const session = checkOrigin(req);
         revokedSessions.set(session.sid, session.validUntil);
+        backgroundStore?.revokeSession(session.userId);
         if (revokedSessions.size > 1000) for (const [sid, expiry] of revokedSessions) if (expiry < Date.now()) revokedSessions.delete(sid);
         res.setHeader('set-cookie', cookieFor('', secure, true));
         return json(res, 200, { ok: true });
+      }
+      // Background queue: verified CSRF + account ownership, no .rbxl upload.
+      if (pathname === '/api/background/jobs' && req.method === 'GET') {
+        const session = requireUser(req);
+        return json(res,200,{jobs: backgroundStore?.list(session.userId)||[],enabled:!!backgroundStore});
+      }
+      if (pathname === '/api/background/jobs' && req.method === 'POST') {
+        if (!backgroundStore) throw new HttpError(503,'Background jobs require a Railway volume and Node.js 22+. See README.');
+        const session=checkOrigin(req);
+        const options=await bulkJobBody(req);
+        if (!options || options.rightsConfirmed!==true || !Array.isArray(options.items))
+          throw new HttpError(403,'Confirm you own or have explicit rights to republish these assets.');
+        const tier=await checkTier(session);
+        const groupId=String(options.groupId||'').trim();
+        if (groupId) validateId(groupId);
+        const description=String(options.description||'').trim();
+        if (description.length>1000 || (description && tier<3))
+          throw new HttpError(403,'Description requires Ultra tier and must be <=1000 characters.');
+        if (options.items.length<1 || options.items.length>30000)
+          throw new HttpError(413,'Choose 1 to 30,000 unique asset IDs for this job.');
+        const seen=new Set();
+        const items=[];
+        for(const raw of options.items){
+          const oldId=validateId(raw.oldId);
+          if(seen.has(oldId)) continue;
+          seen.add(oldId);
+          const assetType=String(raw.assetType||'Auto');
+          if(assetType!=='Auto'&&!AUTO_TYPES.has(assetType)) throw new HttpError(400,'Unsupported asset type in queue.');
+          const displayName=String(raw.displayName||`${assetType} ${oldId}`).trim().slice(0,50);
+          items.push({oldId,assetType,displayName:displayName||`Asset ${oldId}`});
+        }
+        const id=backgroundStore.create(session.userId,{items,groupId,description,
+          fileFingerprint:String(options.fileFingerprint||'').slice(0,256)});
+        return json(res,202,{id,total:items.length,status:'running'});
+      }
+      const bgMatch=pathname.match(/^\/api\/background\/jobs\/([a-f0-9]{32})(?:\/(cancel|resume))?$/);
+      if (bgMatch) {
+        if (!backgroundStore) throw new HttpError(503,'Background jobs are not configured.');
+        const id=bgMatch[1],action=bgMatch[2];
+        if (!action && req.method==='GET'){
+          const session=requireUser(req),job=backgroundStore.view(session.userId,id);
+          if(!job)throw new HttpError(404,'Background job not found.');
+          return json(res,200,job);
+        }
+        if (action && req.method==='POST'){
+          const session=checkOrigin(req);
+          const changed=action==='cancel'?backgroundStore.stop(session.userId,id):backgroundStore.resume(session.userId,id);
+          if (!changed)throw new HttpError(409,'Job was not found or cannot change state.');
+          return json(res,200,{ok:true});
+        }
+        throw new HttpError(405,'Method not allowed.');
       }
       if (pathname === '/api/auto-reupload' && req.method === 'POST') {
         const session = checkOrigin(req);
@@ -373,7 +466,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         if (!upload.ok) throw new HttpError(upload.status >= 500 ? 502 : 400, `Roblox rejected this authorized reupload: ${String(result.message || result.error || 'Check asset permissions and quotas.').slice(0, 160)}`);
         const path = String(result.path || '');
         if (!/^operations\/[A-Za-z0-9_-]+$/.test(path)) throw new HttpError(502, 'Roblox returned no operation ID.');
-        daily.set(session.userId, { day: quota.day, used: quota.used + 1 });
+        chargeUsage(session,quota,tier);
         autoPending.set(dedupeKey, path.split('/')[1]);
         return json(res, 202, { oldId, operation: path.split('/')[1], status: 'processing' });
       }
@@ -406,7 +499,7 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
         if (!upstream.ok) throw new HttpError(upstream.status >= 500 ? 502 : 400, `Roblox upload failed: ${String(output.message || output.error?.message || output.error || 'Check file format and creator permissions.').slice(0, 250)}`);
         const path = String(output.path || '');
         if (!/^operations\/[A-Za-z0-9_-]+$/.test(path)) throw new HttpError(502, 'Roblox returned no operation ID for the upload.');
-        daily.set(session.userId, { day: quota.day, used: quota.used + 1 });
+        chargeUsage(session,quota,tier);
         return json(res, 202, { oldId, operation: path.split('/')[1], status: 'processing' });
       }
       if (pathname.startsWith('/api/operations/') && req.method === 'GET') {
@@ -442,10 +535,20 @@ export function createApp({ env = process.env, fetcher = globalThis.fetch } = {}
       json(res, status, { error: status >= 500 && !(error instanceof HttpError) ? 'Server error. Check the Railway logs.' : error.message });
     }
   };
+  app.backgroundStore=backgroundStore;
+  return app;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const port = Number(process.env.PORT) || 3000;
-  const server = http.createServer(createApp());
-  server.listen(port, '0.0.0.0', () => console.log(`ALEX REUPLOADER listening on ${port}`));
+  const app=createApp();
+  const server = http.createServer(app);
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`ALEX REUPLOADER listening on ${port}`);
+    if(app.backgroundStore) {
+      const worker=createBackgroundWorker(app.backgroundStore,{port});
+      console.log('ALEX persistent background worker running on mounted volume');
+      process.once('SIGTERM',()=>{worker.stop(); server.close();});
+    }
+  });
 }

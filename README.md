@@ -1,3 +1,24 @@
+# ALEX Reuploader V1.9 — persistent background jobs
+
+## New: reupload after closing your computer
+- Run on **Node.js 22.5+**. Attach a **persistent Railway Volume** to the existing service (example mount `/data`). The `RAILWAY_VOLUME_MOUNT_PATH` variable is provided by Railway; the server stores `alex-reuploader-jobs.sqlite` there automatically. Use a *single replica* and keep the service running; don't enable sleep/scale-to-zero.
+- Keep `ALEX_SESSION_SECRET` or `ROBLOX_OAUTH_CLIENT_SECRET` unchanged: the SQLite records store AES-GCM-encrypted session cookies, **never plaintext OAuth tokens**. Protect Railway database backups and credentials.
+- Sign in, choose **Automatically reupload my own assets**, then tick **Run reuploads on Railway after I close my browser**. Choose your `.rbxl` once to send only the list of asset IDs to Railway. The file itself stays local.
+- You can close the browser after the queue is accepted. Return later to the Reupload queue, refresh progress, select the *same original* `.rbxl`, and click **Download rebuilt .RBXL** after maps appear.
+- Server persists queue items, accepted Roblox operation IDs, results and per-day app usage. Skips third-party/private media. Retries safe operation-status polling and resumes rate-limited queues later; uncertain upload submissions require review to prevent duplicates. Pauses when login expires and awaits new sign-in; an ambiguous in-flight POST after a restart is marked for **manual review**, never blindly retried.
+- Uploads are limited to your confirmed tier and Roblox's own quotas. One queued job per user; max **30,000 distinct IDs** per job. Long queues may take days/months; supported source media still depends on Roblox permissions and actual format. Logout pauses jobs.
+- Only the exact owner can view or control their queue. Browser uses existing session + CSRF checks. No `.rbxl` bytes or media data are saved on Railway. The browser must remain available later to rebuild the place.
+- All effects on Roblox are creator-authorized only. New code has NOT been deployed to your Railway service, and **live Roblox OAuth / large production jobs have not been verified**. Test with a tiny place and 2–3 assets first, including an app restart.
+
+## Railway deployment steps
+1. Back up the existing repo and Railway variables.
+2. Deploy this package at the same root directory as V1.8, keeping existing OAuth client ID, secret, redirect URL, public URL and session-secret values.
+3. Configure Node.js **22.5+** and mount a Railway Volume on this service at `/data` (it will provide `RAILWAY_VOLUME_MOUNT_PATH`). Do not use ephemeral `/tmp` or the default application filesystem for the SQLite database.
+4. Use a single Railway service replica. Run `npm start`; watch for `ALEX persistent background worker running on mounted volume` in logs.
+5. Test a small owned-asset reupload, close the browser, then reopen after the job finishes. Download rebuilt `.rbxl` locally and inspect it in Studio. Never assume game changes publish automatically.
+6. Back up the mounted volume. If your OAuth secret or ALEX_SESSION_SECRET changes, older encrypted sessions become invalid, and jobs must be restarted after signing in again.
+
+---
 # ALEX Reuploader — Multi-Asset RBXL Rebuild V10 (large scans)
 
 Creator-authorized Roblox asset reupload workspace with a native `.rbxl` place-file scanner, account-owned media reupload automation, and browser-based `.rbxl` rewriting. Railway-ready and no Studio plugin needed for the automatic workflow.

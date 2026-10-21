@@ -4,7 +4,10 @@ import { scanBinaryPlace, rewriteBinaryPlace } from './rbxl-reader.js';
 const $ = id => document.getElementById(id);
 const STORE = 'alex-reuploader-v1';
 const ASSET_PAGE_SIZE = 250;
-const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false, stopRequested: false, visibleAssetRows: ASSET_PAGE_SIZE, snapshotNotSaved: false };
+const LAST_BG = 'alex-reuploader-latest-background-job';
+function savedBackgroundId(){try{return localStorage.getItem(LAST_BG)||'';}catch{return '';}}
+function rememberBackgroundId(id){try{localStorage.setItem(LAST_BG,id);}catch{/* Optional browser storage unavailable. */}}
+const state = { items: [], mapping: {}, scanCount: 0, insights: null, user: null, config: null, placeBuffer: null, placeName: '', placeFingerprint: '', autoBusy: false, stopRequested: false, visibleAssetRows: ASSET_PAGE_SIZE, snapshotNotSaved: false, backgroundJob: savedBackgroundId() };
 
 function loadSaved() {
   try {
@@ -244,6 +247,66 @@ function downloadFixedPlace() {
   } catch (error) { toast(`Could not rebuild the RBXL: ${error.message}`); }
 }
 
+async function startBackgroundScanned() {
+  if (!state.user?.loggedIn) return toast('Sign in with Roblox to start a background job.');
+  if (!state.config?.backgroundReady) return toast('Attach a Railway persistent volume before using background jobs.');
+  const items = state.items.filter(x => !state.mapping[x.id]).map(x => ({
+    oldId: x.id, assetType: 'Auto', displayName: String(x.name || `Asset ${x.id}`).slice(0, 50)
+  }));
+  if (!items.length) return toast('No unmapped asset IDs remain in this scan.');
+  if (items.length > 30000) return toast('Background queue is capped at 30,000 unique IDs per job. Filter or split your place.');
+  $('autoProgress').textContent = `Sending ${items.length.toLocaleString()} IDs to Railway (no RBXL file)…`;
+  try {
+    const job = await api('/api/background/jobs',{
+      method:'POST',headers:{'content-type':'application/json','x-alex-csrf':state.user.csrf},
+      body:JSON.stringify({rightsConfirmed:true,items,
+        fileFingerprint:state.placeFingerprint,
+        groupId:$('publishGroup').checked?$('groupId').value.trim():'',
+        description:$('description').value.trim()})
+    });
+    state.backgroundJob = job.id;
+    rememberBackgroundId(job.id);
+    $('autoProgress').textContent = `Background job accepted: ${job.total.toLocaleString()} asset IDs. You may close this tab now.`;
+    show('uploads');
+    await refreshBackground();
+  } catch(e) {
+    $('autoProgress').textContent=`Background job NOT started: ${e.message}`;
+    toast(e.message);
+  }
+}
+
+async function refreshBackground() {
+  if(!state.user?.loggedIn || !state.config?.backgroundReady) return;
+  try {
+    if(!state.backgroundJob) {
+      const list=await api('/api/background/jobs');
+      state.backgroundJob=list.jobs?.[0]?.id||'';
+      if(state.backgroundJob)rememberBackgroundId(state.backgroundJob);
+    }
+    if(!state.backgroundJob)return;
+    const job=await api(`/api/background/jobs/${encodeURIComponent(state.backgroundJob)}`);
+    const good=job.counts.succeeded||0;
+    const skipped=job.counts.skipped||0;
+    const review=job.counts.review||0;
+    $('backgroundPill').textContent=job.status.toUpperCase();
+    $('backgroundBar').max=Math.max(1,job.total);
+    $('backgroundBar').value=job.complete;
+    $('backgroundSummary').textContent=`${job.status}: ${job.complete.toLocaleString()}/${job.total.toLocaleString()} handled · ${good} reuploaded · ${skipped} skipped · ${review} need review.`;
+    $('cancelBackground').classList.toggle('hidden',job.status!=='running' && job.status!=='paused');
+    $('resumeBackground').classList.toggle('hidden',job.status!=='paused');
+    // Do not apply mappings to an unrelated .rbxl.
+    if(job.fingerprint && state.placeFingerprint===job.fingerprint) {
+      let changed=false;
+      for(const pair of job.mapped||[]) {
+        if(state.mapping[pair.oldId]!==pair.newId){state.mapping[pair.oldId]=pair.newId;changed=true;}
+      }
+      if(changed){save();render();}
+    } else if(good) {
+      $('backgroundSummary').textContent+=' Reselect the original .rbxl to apply these mappings.';
+    }
+  }catch(e){$('backgroundSummary').textContent=`Could not refresh background job: ${e.message}`;}
+}
+
 async function autoReuploadScanned() {
   if (state.autoBusy) return;
   if (!state.user?.loggedIn) return toast('Sign in with Roblox before enabling automatic reuploads.');
@@ -319,7 +382,10 @@ $('manifestFile').addEventListener('change', async event => {
     const message = parseScan(result);
     $('scanStatus').textContent = `${result.totalInstances.toLocaleString()} instances examined. ${message}${state.snapshotNotSaved ? ' This large scan stays in this tab; choose the file again after a refresh.' : ''}`;
     toast(message);
-    if ($('autoMode').checked) await autoReuploadScanned();
+    if ($('autoMode').checked) {
+      if ($('backgroundMode').checked) await startBackgroundScanned();
+      else await autoReuploadScanned();
+    } else if(state.backgroundJob) await refreshBackground();
   } catch (e) { $('scanStatus').textContent = e.message; toast(e.message); }
   finally { event.target.value = ''; }
 });
@@ -328,12 +394,31 @@ $('filterAsset').addEventListener('input', resetAssetPage); $('typeFilter').addE
 $('moreAssets').addEventListener('click', () => { state.visibleAssetRows += ASSET_PAGE_SIZE; renderAssets(); });
 $('publishGroup').addEventListener('change', () => $('groupField').classList.toggle('hidden', !$('publishGroup').checked));
 $('stopAuto').addEventListener('click', () => { state.stopRequested = true; $('autoProgress').textContent = 'Stopping after the current asset request…'; });
+$('refreshBackground').addEventListener('click', refreshBackground);
+$('cancelBackground').addEventListener('click', async()=>{
+  if(!state.backgroundJob||!state.user?.loggedIn)return;
+  if(!confirm('Cancel remaining queued uploads? Already submitted Roblox operations may still complete.'))return;
+  try{await api(`/api/background/jobs/${state.backgroundJob}/cancel`,{method:'POST',headers:{'x-alex-csrf':state.user.csrf}});await refreshBackground();}
+  catch(e){toast(e.message);}
+});
+$('resumeBackground').addEventListener('click', async()=>{
+  if(!state.backgroundJob||!state.user?.loggedIn)return;
+  try{await api(`/api/background/jobs/${state.backgroundJob}/resume`,{method:'POST',headers:{'x-alex-csrf':state.user.csrf}});await refreshBackground();}
+  catch(e){toast(e.message);}
+});
+setInterval(()=>{if(state.backgroundJob && state.user?.loggedIn)refreshBackground();},12000);
+
 $('copyMapping').addEventListener('click', downloadFixedPlace); $('copyMappingTop').addEventListener('click', downloadFixedPlace); $('downloadFixed').addEventListener('click', downloadFixedPlace);
 
 // Restore authentication independently from saved scan rendering. If a local
 // scan is malformed, it must not prevent the Roblox login UI from initializing.
 Promise.all([api('/api/config'), api('/api/me')]).then(([config, me]) => {
   state.config = config; state.user = me; renderAuth();
+  $('backgroundMode').disabled = !config.backgroundReady;
+  $('backgroundAvailability').textContent = config.backgroundReady
+    ? 'Railway worker ready. Your browser can close after a job is accepted.'
+    : 'Background unavailable: attach a Railway Volume to this service, then redeploy Node 22+.';
+  if(me.loggedIn) refreshBackground();
 }).catch(err => { $('oauthStatus').textContent = `Service unavailable: ${err.message}`; $('oauthPill').textContent = 'OFFLINE'; toast('Could not contact the ALEX backend.'); });
 loadSaved();
 try { render(); }

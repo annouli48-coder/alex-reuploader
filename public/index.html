@@ -23,7 +23,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="safety-note"><span>◉</span><div><strong>Creator-first</strong><small>Only upload assets you own or have permission to use.</small></div></div>
-        <div class="side-footer">ALEX REUPLOADER <span>v1.8 · NO REF CAP</span></div>
+        <div class="side-footer">ALEX REUPLOADER <span>v1.9 · RAILWAY BACKGROUND</span></div>
       </div>
     </aside>
 
@@ -72,6 +72,8 @@
             <div class="panel-head"><div><span class="panel-kicker">AUTOMATION</span><h2>Account-powered reupload</h2></div><span class="mini-tag">NO ID PASTING</span></div>
             <p class="quiet">Enable this before choosing your file. ALEX will try every detected external asset ID through Roblox's authorized APIs, including supported audio, animation, images, decals, meshes, models, and videos. Inaccessible assets and unsupported formats stay unchanged. Roblox upload limits still apply.</p>
             <label class="check-row"><input type="checkbox" id="autoMode" /><span>Automatically reupload my own assets after scanning. I confirm I have rights to republish them.</span></label>
+            <label class="check-row"><input type="checkbox" id="backgroundMode" /><span>Run reuploads on Railway after I close my browser (requires a persistent volume).</span></label>
+            <p id="backgroundAvailability" class="inline-hint">Checking persistent queue availability…</p>
             <label class="check-row"><input type="checkbox" id="publishGroup" /><span>Publish replacements to a group I manage (optional)</span></label>
             <div id="groupField" class="group-field hidden"><label class="field-label" for="groupId">Destination group ID</label><input type="text" id="groupId" value="548271796" inputmode="numeric" pattern="[0-9]+" /><small>Roblox will verify your permission to publish on behalf of this group.</small></div>
             <label class="field-label" for="description">New asset description <span class="ultra-only">ULTRA</span></label><textarea id="description" rows="2" placeholder="Ultra members may add a custom description" disabled></textarea>
@@ -91,6 +93,15 @@
 
         <section class="screen hidden" id="screen-uploads">
           <div class="screen-heading"><div><span class="page-eyebrow">02 / TRANSFORM</span><h1>Reupload results<span class="heading-dot">.</span></h1><p>Successful uploads can be written directly into a rebuilt .rbxl file.</p></div><button class="btn btn-outline" id="copyMappingTop">Download rebuilt .RBXL ↓</button></div>
+          <article class="panel background-panel">
+            <div class="panel-head"><div><span class="panel-kicker">CLOUD WORKER</span><h2>Background upload progress</h2></div><span class="mini-tag" id="backgroundPill">INACTIVE</span></div>
+            <p class="quiet" id="backgroundSummary" role="status">No background job started. You can close your browser once the server accepts a job.</p>
+            <progress id="backgroundBar" max="100" value="0" style="width:100%;height:18px;"></progress>
+            <p class="inline-hint">Your .rbxl remains on your computer. Return later and reselect the same file to download the rebuilt copy.</p>
+            <button class="btn btn-outline" id="refreshBackground">Refresh job results</button>
+            <button class="btn btn-outline hidden" id="cancelBackground">Cancel remaining queue</button>
+            <button class="btn btn-outline hidden" id="resumeBackground">Resume paused queue</button>
+          </article>
           <div class="upload-grid auto-results-grid">
             <div class="queue-side"><article class="panel"><div class="panel-head"><div><span class="panel-kicker">PROGRESS</span><h2>Your new asset IDs</h2></div><span class="count-bubble" id="mappedCount">0</span></div><div class="map-scroll" id="mappingList"><div class="mini-empty">No completed reuploads yet.</div></div><button class="btn btn-outline btn-wide" id="copyMapping">Download rebuilt .RBXL ↓</button><p class="quiet">ALEX will write these replacements into a new .rbxl copy automatically.</p></article>
               <article class="panel tip-panel"><div class="tip-icon">✧</div><div><strong>How replacement works</strong><p>The scanner finds references, then eligible reuploads create new IDs. ALEX rebuilds a separate .rbxl file with those references changed. Other assets and the original file remain untouched.</p></div></article></div>
