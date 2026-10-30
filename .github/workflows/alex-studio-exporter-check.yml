@@ -1,0 +1,25 @@
+name: Validate ALEX Studio Exporter
+on:
+  push:
+    branches: [alex-executor-starter]
+    paths:
+      - "ALEX-Executor/studio-exporter/**"
+      - ".github/workflows/alex-studio-exporter-check.yml"
+  pull_request:
+    branches: [alex-executor-starter]
+    paths:
+      - "ALEX-Executor/studio-exporter/**"
+      - ".github/workflows/alex-studio-exporter-check.yml"
+permissions:
+  contents: read
+jobs:
+  static-checks:
+    name: Studio exporter source smoke checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check source and documented Studio APIs
+        run: node ALEX-Executor/studio-exporter/check-source.mjs
