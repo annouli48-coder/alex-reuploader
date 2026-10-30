@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1020"><meta name="description" content="ALEX Decompiler Connect — Roblox Studio place analyzer with Roblox account sign-in and private owner tools.">
+<link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/icon.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/style.css">
+<title>ALEX Decompiler Connect</title></head><body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand"><img src="/icon.png" alt="ALEX Decompiler icon"><div><strong>ALEX</strong><span>DECOMPILER <b>CONNECT</b></span></div></div>
+    <div class="sidebar-label">ACCOUNT</div>
+    <div id="who" class="account"><span class="pulse"></span> Not connected</div>
+    <div class="sidebar-label">WORKSPACE</div>
+    <div class="nav active">◈ &nbsp; Decompiler</div>
+    <div class="nav">◫ &nbsp; Local place files</div>
+    <div class="nav">▤ &nbsp; Results &amp; exports</div>
+    <div class="nav owner-nav" id="ownerLink" hidden>✦ &nbsp; Owner vault</div>
+    <div class="side-bottom"><span class="pulse"></span> SOURCE-LOCKED MODE <p>Roblox sign-in is required. Your local place never leaves this device.</p></div>
+  </aside>
+  <main>
+    <header class="top"><div><div class="eyebrow">ALEX / CREATOR WORKSPACE</div><h1>Decompiler <em>Connect</em></h1><p>Run the built-in analyzer on a Roblox Studio XML place you own or can edit.</p></div><span class="version">V2.0 · MOBILE + DESKTOP</span></header>
+    <div class="container">
+      <section class="hero"><div><span class="eyebrow">ROBLOX ACCOUNT CONNECTION</span><h2 id="loginTitle">Connect your Roblox account</h2><p id="loginText">Only authenticated Roblox accounts can use ALEX. Two approved IDs get private owner tools.</p></div><div class="login-actions"><a id="connect" class="button primary" href="/auth/login">Connect Roblox ↗</a><button id="logout" class="button ghost" hidden>Sign out</button></div></section>
+      <section class="grid">
+        <div class="card work"><div class="card-title"><span class="step">01</span> LOCAL ANALYZER <span class="label-right">FIXED ENGINE</span></div>
+          <div class="lock-strip"><span>▣</span><div><strong>One built-in operation</strong><p>No Lua paste box and no Roblox Player injection. Choose an XML place and run analysis on this device.</p></div></div>
+          <input id="file" type="file" accept=".rbxlx,.rbxmx" hidden>
+          <button id="choose" class="button secondary">＋ &nbsp; Choose .rbxlx / .rbxmx file</button>
+          <div class="picked" id="filename">No place selected</div>
+          <label class="confirm"><input type="checkbox" id="authorized"> I own this place or have explicit permission to inspect its accessible source.</label>
+          <button id="execute" class="button primary run" disabled>▶ &nbsp; Execute Decompiler</button>
+          <div class="progress"><div id="fill"></div></div><small id="status">Connect Roblox and select a saved Studio place to begin.</small>
+          <div class="stats"><div><span>OBJECTS</span><b id="objects">—</b></div><div><span>SCRIPT INSTANCES</span><b id="scripts">—</b></div><div><span>READABLE SCRIPTS</span><b id="readable">—</b></div></div>
+        </div>
+        <div class="card results"><div class="card-title"><span class="step">02</span> OUTPUT LOG</div><pre id="log" role="log" aria-live="polite">[ALEX] Login required. No Roblox Player connection.</pre><button id="export" class="button secondary" disabled>↓ Export analysis .json</button><div class="notice"><strong>Privacy:</strong> analysis happens locally in your browser. The website only receives your Roblox login status, not your place file.</div></div>
+      </section>
+      <section id="ownerArea" class="card owner" hidden><div class="card-title"><span class="step">✦</span> PRIVATE OWNER VAULT <span class="label-right">ROBLOX ID VERIFIED</span></div>
+        <p>Only the two configured Roblox accounts can fetch, add, copy, and remove these stored source entries. Snippets stay on the server and are <strong>not executed</strong> by this app.</p>
+        <div class="owner-grid"><div><label for="ownerTitle">Title</label><input id="ownerTitle" maxlength="90" placeholder="My Decompiler V4" autocomplete="off"><label for="ownerSource">Lua/Luau source (owner-only)</label><textarea id="ownerSource" spellcheck="false" placeholder="Paste private Lua source here. It will only be returned to approved owner accounts."></textarea><button id="addOwner" class="button primary">＋ Save private script</button></div><div><h3>Saved private scripts</h3><div id="ownerScripts" class="saved-list">No saved scripts yet</div></div></div>
+        <div class="notice">Code secrecy requires secure server hosting and access controls. Approved owners can copy code; no browser or desktop software can make downloadable source impossible to extract. Do not include your private source in the public GitHub repository.</div>
+      </section>
+      <section class="card install"><div><div class="eyebrow">INSTALL ANYWHERE</div><h3>Mac · Windows · iPhone · iPad · Android</h3><p>Phone/tablet: open this HTTPS website in Safari or Chrome, then Add to Home Screen / Install App. Desktop: use the provided Terminal or PowerShell launcher script once you know the deployed site URL.</p></div><button id="installHelp" class="button secondary">Installation help ↗</button></section>
+    </div>
+    <footer>ALEX Decompiler Connect · Creator-authorized XML place analyzer · Not affiliated with Roblox</footer>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body></html>

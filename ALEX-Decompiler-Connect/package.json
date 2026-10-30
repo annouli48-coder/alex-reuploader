@@ -1,0 +1,9 @@
+{
+  "name": "alex-decompiler-connect",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Roblox OAuth-gated local XML analyzer and two-owner private Luau library",
+  "scripts": {"start":"node server/app.mjs", "test":"node --test test/*.test.mjs", "check":"node --check server/app.mjs && node --check public/app.js && node --check public/engine.js"},
+  "engines": {"node": ">=22.0.0"}
+}
