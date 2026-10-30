@@ -42,7 +42,7 @@ The same mobile PWA works on iPhone/iPad Safari and supported Android browsers. 
 - Windows setup executable, Start menu, and desktop shortcut use `build/icon.ico`.
 - Both one-command installers print an **ALEX EXECUTOR INSTALLER** ASCII-art banner and show download/verification/install messages.
 - Source artwork is generated deterministically by `ALEX-Executor/scripts/generate_icons.py` (Pillow); the GitHub workflow generates it before compiling each platform. The artwork is original ALEX branding, not an Opiumware icon.
-- The actual .app and .exe need a successful new GitHub Actions build. Previous build artifacts without icon support are not updated retroactively.
+- The v0.2.0 macOS `.app` archives and Windows `.exe` were produced by the successful release workflow with the branded icon-generation step; their appearance after local installation still needs a real-device check.
 
 ## Local development
 
