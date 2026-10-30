@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0615">
+  <meta name="description" content="ALEX Executor download hub: free mobile Luau editor PWA and desktop Luau editor for macOS and Windows.">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ALEX Code">
+  <meta property="og:title" content="ALEX — Your code, every screen.">
+  <meta property="og:description" content="Install ALEX Code on your iPhone, iPad, Android, Windows or Mac.">
+  <title>ALEX — Download for Every Screen</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="background-glow" aria-hidden="true"></div>
+  <header class="topbar">
+    <a href="#top" class="brand" aria-label="ALEX home"><span class="brand-icon">A</span><span class="brand-stack"><strong>ALEX</strong><small>EXECUTOR</small></span></a>
+    <nav aria-label="Main navigation">
+      <a href="#downloads">Downloads</a>
+      <a href="#workspace">Code editor</a>
+      <a href="#questions">FAQ</a>
+    </nav>
+    <a class="nav-cta" href="#downloads">Get ALEX <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> CROSS-PLATFORM CODE WORKSPACE <span class="eyebrow-rule"></span> V1</div>
+        <h1>YOUR CODE.<br><em>EVERY SCREEN.</em></h1>
+        <p class="hero-lead">Meet ALEX: a clean, powerful-feeling workspace for your Luau scripts. Take your editor from Mac to Windows to the phone in your pocket.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#downloads">Choose your device <span aria-hidden="true">↗</span></a>
+          <a class="button button-ghost" href="#workspace">Try the mobile editor <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="trust-line"><span class="status-light"></span> No account required <span class="separator">/</span> Local script editing <span class="separator">/</span> Free starter</div>
+      </div>
+      <div class="hero-visual" aria-label="Illustration of ALEX code editor">
+        <div class="orb orb-one"></div><div class="orb orb-two"></div>
+        <div class="visual-window">
+          <div class="window-titlebar"><span class="traffic"><i></i><i></i><i></i></span><span class="file-tab"><span>✦</span> hello.luau</span><span class="window-actions">⌕　⋯</span></div>
+          <div class="visual-code"><span class="gutter">01<br>02<br>03<br>04<br>05<br>06<br>07<br>08</span><pre><span class="tok-pink">local</span> <span class="tok-white">ALEX</span> = {
+  <span class="tok-blue">platforms</span> = {<span class="tok-yellow">"iOS"</span>, <span class="tok-yellow">"Android"</span>},
+  <span class="tok-blue">desktop</span> = <span class="tok-yellow">"Mac + Windows"</span>,
+  <span class="tok-blue">ready</span> = <span class="tok-green">true</span>
+}
+
+<span class="tok-pink">print</span>(<span class="tok-yellow">"Welcome to ALEX"</span>)</pre></div>
+          <div class="visual-output"><div class="visual-output-title"><span class="green-dot"></span> OUTPUT <small>● READY</small></div><div><span>›</span> Welcome to ALEX <span class="cursor"></span></div></div>
+        </div>
+        <div class="floating-label floating-label-top"><span class="tiny-spark">✳</span> BUILT FOR MAKERS</div>
+        <div class="floating-label floating-label-bottom"><span class="tiny-spark">⬢</span> ONE WORKSPACE. EVERYWHERE.</div>
+      </div>
+    </section>
+    <section class="ticker" aria-label="Supported platforms"><div class="ticker-inner">macOS <span>✳</span> WINDOWS <span>✳</span> iPHONE <span>✳</span> iPAD <span>✳</span> ANDROID <span>✳</span> LUAU <span>✳</span> macOS <span>✳</span> WINDOWS <span>✳</span> iPHONE <span>✳</span> iPAD <span>✳</span> ANDROID</div></section>
+    <section id="downloads" class="download-section shell">
+      <div class="section-kicker"><span class="bullet-square"></span> 01 / DOWNLOADS</div>
+      <div class="section-heading"><div><h2>Pick your <em>platform.</em></h2><p>The same ALEX style, built for your screen.</p></div><div class="device-detected" id="device-detected" aria-live="polite">Detecting device...</div></div>
+      <div class="download-grid">
+        <article class="platform-card featured" id="mobile-card">
+          <div class="card-top"><span class="platform-glyph">◫</span><span class="platform-badge">INSTALLABLE WEB APP</span></div>
+          <h3>iPhone & iPad</h3><p class="platform-text">Your portable Luau notebook. Edit, import and save scripts right on your device.</p>
+          <div class="chip-row"><span>iOS & iPadOS</span><span>Safari</span><span>Touch-ready</span></div>
+          <button class="card-action bright" id="ios-install" type="button">How to install <span>↗</span></button>
+        </article>
+        <article class="platform-card" id="android-card">
+          <div class="card-top"><span class="platform-glyph">⬡</span><span class="platform-badge subtle">PWA · NO APK</span></div>
+          <h3>Android</h3><p class="platform-text">Add ALEX to your Home Screen through Chrome. No separate APK required.</p>
+          <div class="chip-row"><span>Android</span><span>Chrome</span><span>Offline editor</span></div>
+          <button class="card-action" id="android-install" type="button">Install mobile app <span>↗</span></button>
+        </article>
+        <article class="platform-card" id="mac-card">
+          <div class="card-top"><span class="platform-glyph apple">⌘</span><span class="platform-badge subtle">DESKTOP</span></div>
+          <h3>Mac</h3><p class="platform-text">Dedicated Electron editor with local open/save and a custom purple ALEX icon.</p>
+          <div class="chip-row"><span>Apple Silicon</span><span>Intel x64</span></div>
+          <div class="two-actions"><a class="card-action download-link" data-asset="ALEX-Executor-mac-arm64.zip" href="#download-info" aria-disabled="true">Apple Silicon <span>↗</span></a><a class="card-action download-link" data-asset="ALEX-Executor-mac-x64.zip" href="#download-info" aria-disabled="true">Intel <span>↗</span></a></div>
+        </article>
+        <article class="platform-card" id="windows-card">
+          <div class="card-top"><span class="platform-glyph">⊞</span><span class="platform-badge subtle">DESKTOP</span></div>
+          <h3>Windows</h3><p class="platform-text">Installer for supported Windows x64 desktops. One workspace for your Lua and Luau files.</p>
+          <div class="chip-row"><span>x64</span><span>Installer</span><span>Local files</span></div>
+          <a class="card-action download-link" data-asset="ALEX-Executor-Setup-x64.exe" href="#download-info" aria-disabled="true">Windows x64 <span>↗</span></a>
+        </article>
+      </div>
+      <div id="download-info" class="release-notice" role="status"><span class="notice-icon">ⓘ</span><span id="release-status-text">Checking the latest desktop prerelease…</span><a href="https://github.com/annouli48-coder/alex-reuploader/releases" target="_blank" rel="noopener noreferrer">View releases ↗</a></div>
+    </section>
+    <section id="workspace" class="editor-section shell">
+      <div class="section-kicker"><span class="bullet-square"></span> 02 / MOBILE WORKSPACE</div>
+      <div class="section-heading"><div><h2>Code in your <em>pocket.</em></h2><p>Try the actual browser-based editor. Scripts are stored locally on this device.</p></div><span class="beta-chip">WORKING WEB EDITOR</span></div>
+      <div class="workspace-window">
+        <div class="workspace-topline"><span class="workspace-dot"></span><span class="workspace-title">ALEX CODE STUDIO</span><span class="workspace-right">LOCAL MODE　·　NO CLOUD</span></div>
+        <div class="workspace-toolbar"><input type="text" id="script-name" value="hello.luau" maxlength="90" aria-label="Script file name"><div class="workspace-buttons"><button id="new-code" type="button">New</button><button id="open-code" type="button">Import</button><button id="save-code" type="button">Save</button><button id="export-code" class="export-btn" type="button">Export ↓</button></div></div>
+        <div class="workspace-content"><div id="code-gutter" class="code-gutter" aria-hidden="true">1<br>2<br>3</div><textarea id="code-input" aria-label="Luau code editor" autocapitalize="off" autocomplete="off" spellcheck="false" inputmode="text">-- Welcome to ALEX Code
+local message = "Hello, world!"
+print(message)</textarea></div>
+        <div class="workspace-footer"><span id="editor-status" aria-live="polite">Editor ready. Execution is not available.</span><span id="editor-lines">3 lines · Luau</span></div>
+        <input id="import-file" type="file" hidden accept=".lua,.luau,.txt,text/plain">
+      </div>
+      <div class="editor-footnote"><span>◈</span> Save keeps your script in this browser. Export downloads a file for a backup. ALEX cannot inject into Roblox Player or execute scripts.</div>
+    </section>
+    <section id="questions" class="faq-section shell"><div class="section-kicker"><span class="bullet-square"></span> 03 / GOOD TO KNOW</div><h2>No confusion. <em>Just facts.</em></h2>
+      <div class="faq-list">
+        <details><summary>Is the iPhone / Android app native?</summary><p>It's a progressive web app (PWA), installed from your browser. It's not an App Store app, iOS IPA, or Android APK. Some browsers don't support installing PWAs.</p></details>
+        <details><summary>Does ALEX execute Roblox scripts in the Roblox Player?</summary><p>No. This version is a local Lua/Luau editor and script-file organizer. The desktop Attach and Execute buttons do not connect to Roblox. Nothing here bypasses Roblox security protections.</p></details>
+        <details><summary>Why isn't my desktop download available yet?</summary><p>Desktop download buttons only activate when GitHub has published the matching prerelease assets. A failed or incomplete build means there is no verified installer to download yet.</p></details>
+        <details><summary>Will it work on every version of Windows and Mac?</summary><p>No universal compatibility is guaranteed. The current desktop targets are Windows x64, macOS Intel x64, and macOS Apple Silicon arm64. System requirements and OS compatibility still need testing.</p></details>
+        <details><summary>Is my script uploaded somewhere?</summary><p>The web editor stores code in your browser's local storage and does not upload your script to a server. You can export a file backup; clearing browser/site data can delete locally saved edits.</p></details>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer shell"><div class="footer-brand"><span class="brand-icon">A</span><div><strong>ALEX</strong><small>CODE EVERYWHERE</small></div></div><p>Made for creators. No Roblox affiliation. Desktop editor starter + mobile PWA.</p><a href="https://github.com/annouli48-coder/alex-reuploader/tree/alex-executor-starter/ALEX-Executor" target="_blank" rel="noopener noreferrer">GitHub source ↗</a></footer>
+  <dialog id="install-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><div><span class="section-kicker">INSTALL ALEX</span><h2 id="dialog-title">Add ALEX to your device</h2></div><button id="close-dialog" class="dialog-close" aria-label="Close installation instructions">✕</button></div><ol id="install-steps"></ol><p class="dialog-note">This installs the ALEX Code web app. It does not install a native Roblox executor.</p><button id="dialog-done" class="button button-primary" type="button">Got it</button></dialog>
+</body>
+</html>
