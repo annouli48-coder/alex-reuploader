@@ -124,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG=alex-executor-v0.1.0
+          TAG=alex-executor-v0.2.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; refusing to overwrite binaries."
             exit 0
@@ -137,6 +137,6 @@ jobs:
             release-assets/ALEX-Executor-Setup-x64.exe \
             release-assets/ALEX-Executor-Setup-x64.exe.sha256 \
             --target "$GITHUB_SHA" \
-            --title 'ALEX Executor v0.1.0 - Desktop Starter (not a Roblox injector)' \
-            --notes 'Unsigned starter: Luau text editor/open/save only. No Roblox Player attach or execution engine. Check your downloads and OS security warnings.' \
+            --title 'ALEX Executor v0.2.0 - Desktop Starter (not a Roblox injector)' \
+            --notes 'Unsigned customizable starter: multi-tab Luau editor, font/theme/background settings, file open/save. No Roblox Player injection. No Roblox Player attach or execution engine. Check your downloads and OS security warnings.' \
             --prerelease

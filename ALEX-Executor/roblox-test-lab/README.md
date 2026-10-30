@@ -34,3 +34,7 @@ Roblox official docs:
 - https://devforum.roblox.com/t/an-update-on-automated-action-against-modified-clients/3640609/1
 - https://create.roblox.com/docs/reference/engine/classes/ServerScriptService/LoadStringEnabled
 - https://create.roblox.com/docs/projects/client-server
+
+## ALEX V2 panel settings
+
+On phones and tablets in your private test place, tap the small ALEX ✦ launcher. The panel can be dragged by its top bar and resized using its bottom-right handle. Tap ⚙ to choose Purple/Blue/Green/Pink accents, Midnight/Black/Slate/Plum code backgrounds, and change code text size from 11 to 26 px. These are session-only appearance preferences. The test code still runs on the owned test place's **server**, not as a general client-side injector. Always test in a disposable private place.

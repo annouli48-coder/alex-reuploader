@@ -17,7 +17,7 @@ if [[ -t 1 ]]; then printf '\033[0m'; fi
 printf '[ALEX] Checking Mac architecture...\n'
 
 REPO="${ALEX_EXECUTOR_REPO:-annouli48-coder/alex-reuploader}"
-TAG="${ALEX_EXECUTOR_RELEASE_TAG:-alex-executor-v0.1.0}"
+TAG="${ALEX_EXECUTOR_RELEASE_TAG:-alex-executor-v0.2.0}"
 case "$(uname -m)" in
   arm64) ARCH="arm64" ;;
   x86_64) ARCH="x64" ;;

@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const RELEASE_API = 'https://api.github.com/repos/annouli48-coder/alex-reuploader/releases/tags/alex-executor-v0.1.0';
+  const RELEASE_API = 'https://api.github.com/repos/annouli48-coder/alex-reuploader/releases/tags/alex-executor-v0.2.0';
   const DEFAULT_CODE = '-- Welcome to ALEX Code\nlocal message = "Hello, world!"\nprint(message)';
   const STORAGE_KEY = 'alex-code-editor-v1';
   const $ = (id) => document.getElementById(id);

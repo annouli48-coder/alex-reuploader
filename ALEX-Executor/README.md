@@ -20,13 +20,13 @@ Windows (PowerShell, x64):
 irm https://raw.githubusercontent.com/annouli48-coder/alex-reuploader/alex-executor-starter/ALEX-Executor/install/install-windows.ps1 | iex
 ```
 
-**These commands are not usable until a GitHub Release tagged `alex-executor-v0.1.0` exists with files:**
+**These commands are not usable until a GitHub Release tagged `alex-executor-v0.2.0` exists with files:**
 
 - `ALEX-Executor-mac-arm64.zip` and `.sha256`
 - `ALEX-Executor-mac-x64.zip` and `.sha256`
 - `ALEX-Executor-Setup-x64.exe` and `.sha256`
 
-Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.1.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
+Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.2.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
 
 ## Download website and phone/tablet version
 
@@ -59,3 +59,7 @@ Requires Node.js 22 or newer. App can open/edit/save `.lua` and `.luau` files. R
 ## Important release notes
 
 The GitHub Actions run must be completed successfully for download links to work. There is currently **no Roblox Player injection/execution engine**. The initial starter release is a desktop Luau file editor. The existing Reuploader repository `main` is untouched by this staging branch. New app versions require a new GitHub release tag plus the matching tag update in both installers and the workflow.
+
+## ALEX V2 interface updates
+
+The desktop Electron app now includes multiple code tabs, session restore, custom accent themes, editor backgrounds, adjustable code font size, and optional line wrapping. Mac and Windows installer scripts target the **v0.2.0** release. The mobile ALEX Code PWA uses a floating A icon to open a draggable/resizable editor inside the PWA (not inside other apps). It includes matching saved color/background/font controls, and source import/export. The Roblox in-game Test Lab (separate from the PWA) now has a floating ALEX launcher and movable/resizable panel with settings in **your own private test experience**. Desktop Attach/Execute buttons are not connected to Roblox Player, and the PWA cannot inject into Roblox.
