@@ -138,3 +138,16 @@ footer span:first-child{display:flex;align-items:center;gap:8px;color:#a2acc5;fo
 @media(max-width:1150px){.sidebar{width:220px;min-width:220px}.work-grid{grid-template-columns:minmax(0,1fr) 235px;gap:11px}.content{padding:17px 15px 12px}.topbar{padding:20px}.toolbar{flex-wrap:wrap}.toolbar .buttons{flex-wrap:wrap}.tool-card{padding:14px}.file-info{min-width:110px}}
 @media(max-width:890px){.sidebar{width:184px;min-width:184px;padding-inline:9px}.brand-text small{font-size:8px;letter-spacing:.5px}.work-grid{grid-template-columns:minmax(0,1fr)}.inspector{display:none}.topbar{min-height:108px}.topbar-right{display:none}.workspace-top{margin-bottom:9px}.console{height:128px}}
 @media(max-height:690px){.topbar{min-height:98px;padding-block:15px}.workspace-top{margin-bottom:9px}.content{padding-block:12px}.console{height:120px;min-height:98px}.sidebar{padding-top:14px}.brand{padding-bottom:15px}}
+
+/* Open creator tools as a compact drawer on small application windows. */
+@media(max-width:890px){
+  .main{position:relative}
+  body[data-panel="testLab"] .inspector,
+  body[data-panel="updates"] .inspector{
+    display:flex;position:absolute;right:8px;top:155px;bottom:42px;
+    z-index:9;width:min(315px,calc(100% - 20px));
+    padding:10px;background:#111928;border:1px solid #3c4863;
+    border-radius:13px;box-shadow:0 14px 55px #0009;
+  }
+  .inspector .tip-card{display:none}
+}
