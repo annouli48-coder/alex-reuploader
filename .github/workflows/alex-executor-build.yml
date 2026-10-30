@@ -19,13 +19,8 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            task: dist:mac:arm64
-            label: mac-arm64
-          - os: macos-latest
-            task: dist:mac:x64
-            label: mac-x64
+            label: mac-both
           - os: windows-latest
-            task: dist:win:x64
             label: win-x64
     runs-on: ${{ matrix.os }}
     steps:
@@ -43,11 +38,21 @@ jobs:
       - name: Install dependencies
         working-directory: ALEX-Executor
         run: npm install --no-audit --no-fund
-      - name: Package desktop app
+      - name: Package macOS Apple Silicon + Intel apps on one runner
+        if: runner.os == 'macOS'
         working-directory: ALEX-Executor
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run ${{ matrix.task }}
+        shell: bash
+        run: |
+          npm run dist:mac:arm64
+          npm run dist:mac:x64
+      - name: Package Windows x64 app
+        if: runner.os == 'Windows'
+        working-directory: ALEX-Executor
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win:x64
       - name: Hash macOS archive
         if: runner.os == 'macOS'
         shell: bash
@@ -55,7 +60,7 @@ jobs:
           cd ALEX-Executor/dist
           shopt -s nullglob
           files=(ALEX-Executor-mac-*.zip)
-          test "${#files[@]}" -eq 1
+          test "${#files[@]}" -eq 2
           for f in "${files[@]}"; do shasum -a 256 "$f" > "$f.sha256"; done
       - name: Hash Windows setup
         if: runner.os == 'Windows'
