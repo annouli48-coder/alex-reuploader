@@ -170,10 +170,16 @@ local actions = instance("Frame", {
 	Size = UDim2.new(1, 0, 0, 150),
 	BackgroundTransparency = 1,
 }, root) :: Frame
-instance("UIListLayout", {Padding = UDim.new(0, 10)}, actions)
+instance("UIListLayout", {
+	Padding = UDim.new(0, 10),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+}, actions)
 local scanButton = button(actions, "◈  SCAN PLACE", THEME.purpleDark)
+scanButton.LayoutOrder = 1
 local selectButton = button(actions, "▣  EXPORT SELECTED MODELS / SCRIPTS", THEME.panelBright)
+selectButton.LayoutOrder = 2
 local placeButton = button(actions, "↗  FULL PLACE EXPORT (.RBXLX) GUIDE", THEME.panelBright)
+placeButton.LayoutOrder = 3
 
 local countsPanel = instance("Frame", {
 	LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 92),
