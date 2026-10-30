@@ -31,13 +31,15 @@
       "target": [
         "zip"
       ],
-      "artifactName": "ALEX-Executor-mac-${arch}.${ext}"
+      "artifactName": "ALEX-Executor-mac-${arch}.${ext}",
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "ALEX-Executor-Setup-${arch}.${ext}"
+      "artifactName": "ALEX-Executor-Setup-${arch}.${ext}",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
