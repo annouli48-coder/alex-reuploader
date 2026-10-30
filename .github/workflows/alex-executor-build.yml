@@ -35,6 +35,17 @@ jobs:
           node --check src/main.js
           node --check src/preload.js
           node --check src/renderer.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate and verify ALEX desktop icons
+        working-directory: ALEX-Executor
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          python scripts/generate_icons.py
+          test -s build/icon.icns
+          test -s build/icon.ico
       - name: Install dependencies
         working-directory: ALEX-Executor
         run: npm install --no-audit --no-fund
