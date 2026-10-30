@@ -11,7 +11,7 @@ Write-Host @'
 '@ -ForegroundColor Magenta
 Write-Host '[ALEX] Checking Windows architecture...' -ForegroundColor Cyan
 $repo = if ($env:ALEX_EXECUTOR_REPO) { $env:ALEX_EXECUTOR_REPO } else { 'annouli48-coder/alex-reuploader' }
-$tag = if ($env:ALEX_EXECUTOR_RELEASE_TAG) { $env:ALEX_EXECUTOR_RELEASE_TAG } else { 'alex-executor-v0.2.0' }
+$tag = if ($env:ALEX_EXECUTOR_RELEASE_TAG) { $env:ALEX_EXECUTOR_RELEASE_TAG } else { 'alex-executor-v0.3.0' }
 if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -and $env:PROCESSOR_ARCHITEW6432 -ne 'AMD64') {
   throw 'Windows x64 required.'
 }

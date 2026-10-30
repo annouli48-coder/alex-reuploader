@@ -1,49 +1,118 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'">
-<title>ALEX Executor</title>
-<link rel="stylesheet" href="app.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>ALEX — Roblox Workspace</title>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="app">
- <aside>
-  <div class="brand"><span class="logo">A</span><div><strong>ALEX</strong><small>EXECUTOR V2</small></div></div>
-  <div class="subhead">WORKSPACE</div>
-  <button id="settingsOpen" type="button">⚙ Appearance & Settings</button>
-  <button id="newScript">＋ New Script</button>
-  <div class="subhead examples">QUICK SCRIPTS</div>
-  <button class="example" data-code="print(&quot;Hello from ALEX!&quot;)">◇ Hello World</button>
-  <button class="example" data-code="local Players = game:GetService(&quot;Players&quot;)&#10;print(Players.LocalPlayer and Players.LocalPlayer.Name)">◇ Current Player</button>
-  <div class="bottom"><span class="dot"></span> Desktop editor ready<small>Roblox runtime not attached</small></div>
- </aside>
- <main>
-  <header><div><small>DEVELOPER WORKSPACE</small><h1>Script Editor <em>V2</em></h1></div><span class="tag">Windows · macOS</span></header>
-  <div class="tabs" id="tabs" role="tablist" aria-label="Open scripts"></div>
-  <div class="toolbar">
-    <div class="file"><span id="filename">untitled.luau</span><span id="unsaved">*</span></div>
-    <div class="buttons"><button id="open">Open</button><button id="save">Save</button><button id="clear">Clear</button><button id="attach">Attach</button><button class="primary" id="execute">Execute ▶</button></div>
-  </div>
-  <div class="editor"><pre id="lines"></pre><textarea id="code" spellcheck="false" aria-label="Luau code editor">-- Welcome to ALEX Executor
-print("Hello from ALEX!")</textarea></div>
-  <div class="console-title">OUTPUT <button id="clearLog">Clear logs</button></div>
-  <pre id="output">Editor is ready. No Roblox Player execution engine is included.</pre>
-  <footer>Local Luau editor · Test Lab for your own games · Roblox Player injection is not implemented</footer>
- </main>
+  <aside class="sidebar" aria-label="ALEX navigation">
+    <div class="brand"><span class="logo" aria-hidden="true">A<span class="logo-star">✦</span></span><span class="brand-text"><strong>ALEX</strong><small>ROBLOX WORKSPACE <b>V3</b></small></span></div>
+    <div class="workspace-name"><span class="live-dot"></span><span>LUAU WORKSPACE</span><span class="live-tag">LOCAL</span></div>
+    <div class="nav-title">WORKSPACE</div>
+    <button class="nav-item nav-selected" id="navEditor" type="button"><span class="nav-icon">⌘</span> Code editor <span class="key-hint">⌘1</span></button>
+    <button class="nav-item" id="navTestLab" type="button"><span class="nav-icon">⚡</span> Studio Test Lab</button>
+    <button class="nav-item" id="navUpdates" type="button"><span class="nav-icon">↗</span> Roblox updates</button>
+    <button class="nav-item" id="settingsOpen" type="button"><span class="nav-icon">⚙</span> Appearance</button>
+    <div class="nav-title templates-title">ROBLOX TEMPLATES</div>
+    <button class="template-item example" type="button" data-template="player"><span class="template-icon">P</span><span>Player &amp; character</span><span class="template-arrow">↗</span></button>
+    <button class="template-item example" type="button" data-template="part"><span class="template-icon">3D</span><span>Part &amp; TweenService</span><span class="template-arrow">↗</span></button>
+    <button class="template-item example" type="button" data-template="remote"><span class="template-icon">R</span><span>RemoteEvent starter</span><span class="template-arrow">↗</span></button>
+    <button class="template-item example" type="button" data-template="gui"><span class="template-icon">UI</span><span>ScreenGui starter</span><span class="template-arrow">↗</span></button>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer"><div class="status-line"><span class="live-dot"></span> Editor ready</div><small>Roblox Studio workflow</small><small>Works on macOS &amp; Windows</small></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left"><span class="breadcrumb">WORKSPACE <span>/</span> SCRIPTS</span><h1>Luau Studio <span class="h1-accent">/ Editor</span></h1><p>Build, organize &amp; test scripts for your own Roblox experiences.</p></div>
+      <div class="topbar-right"><span class="roblox-badge"><span class="roblox-diamond" aria-hidden="true"></span> ROBLOX · LUAU</span><button id="newScript" class="top-new" type="button">＋ New script</button></div>
+    </header>
+
+    <div class="content">
+      <div class="workspace-top"><div><span class="eyebrow">YOUR WORKSPACE</span><h2>Script editor <span class="h2-version">V3</span></h2></div><div class="workspace-meta"><span class="meta-dot"></span><span id="documentStatus">Unsaved workspace</span></div></div>
+
+      <div class="work-grid">
+        <section class="editor-shell" aria-label="Luau script editor">
+          <div class="tabs" id="tabs" role="tablist" aria-label="Open scripts"></div>
+          <div class="toolbar">
+            <div class="file-info"><span class="file-icon">⌘</span><span id="filename">untitled.luau</span><span id="unsaved" title="Unsaved changes">●</span></div>
+            <div class="buttons">
+              <button id="open" type="button" title="Open Luau/Lua/TXT file">Open</button>
+              <button id="save" type="button" title="Save to disk (⌘S)">Save</button>
+              <button id="clear" type="button" title="Clear the current editor">Clear</button>
+              <button id="copy" type="button" title="Copy Lua code to clipboard">Copy</button>
+              <button id="execute" class="primary" type="button">⚡ Test in Studio</button>
+            </div>
+          </div>
+          <div class="editor" id="editor">
+            <div class="gutter"><div class="gutter-label">LN</div><pre id="lines" aria-hidden="true"></pre></div>
+            <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Roblox Luau source code">-- ALEX Roblox Workspace
+-- Create a script, then paste into Roblox Studio.
+print("Hello from ALEX!")</textarea>
+          </div>
+          <div class="editor-status"><span>Luau <span class="status-separator">•</span> UTF-8 <span class="status-separator">•</span> Roblox</span><span id="editorStats">3 lines · 0 characters</span></div>
+          <section class="console" aria-label="Activity log">
+            <div class="panel-heading"><span><span class="panel-heading-icon">›_</span> ACTIVITY</span><button id="clearLog" type="button">Clear logs</button></div>
+            <pre id="output" role="log" aria-live="polite">Editor is ready. Choose a Roblox template or open an existing Luau file.</pre>
+          </section>
+        </section>
+
+        <aside class="inspector" aria-label="Roblox toolbox">
+          <div class="tool-card" id="editorPanel">
+            <div class="tool-card-top"><span class="card-icon">✦</span><span class="eyebrow">ROBLOX CREATOR TOOLS</span></div>
+            <h3>Build in Luau.<br><span>Test in Studio.</span></h3>
+            <p>A focused workspace for Roblox scripts. No fake attach button — test code inside an experience you control.</p>
+            <button id="copyQuick" class="wide-button" type="button">⧉ Copy code for Studio</button>
+            <button id="openLab" class="outline-button" type="button">Open Test Lab guide ↗</button>
+            <div class="tool-divider"></div>
+            <div class="quick-stat"><span>Active language</span><strong>Luau</strong></div>
+            <div class="quick-stat"><span>Current file</span><strong id="panelFile">untitled.luau</strong></div>
+            <div class="quick-stat"><span>Run target</span><strong>Roblox Studio</strong></div>
+          </div>
+
+          <div class="tool-card hidden" id="testLabPanel">
+            <div class="tool-card-top"><span class="card-icon">⚡</span><span class="eyebrow">AUTHORIZED TEST LAB</span></div>
+            <h3>Run in your<br><span>own experience.</span></h3>
+            <p>Script execution happens in Roblox Studio or your separate private ALEX Test Lab — not inside Roblox Player from this app.</p>
+            <ol class="step-list"><li>Copy the active Luau script.</li><li>Open your own place in Roblox Studio.</li><li>Paste into a Script or LocalScript, or your installed private ALEX Test Lab.</li><li>Press Play and inspect the Studio Output window.</li></ol>
+            <button id="labCopy" class="wide-button" type="button">⧉ Copy active script</button>
+            <button id="labDocs" class="outline-button" type="button">Roblox scripting docs ↗</button>
+            <button id="labBack" class="quiet-button" type="button">← Back to workspace</button>
+          </div>
+
+          <div class="tool-card hidden" id="updatesPanel">
+            <div class="tool-card-top"><span class="card-icon">↗</span><span class="eyebrow">ROBLOX CREATOR NEWS</span></div>
+            <h3>Stay ahead<br><span>of the updates.</span></h3>
+            <p>Snapshot: October 30, 2026. For anything newer, open the official release notes below.</p>
+            <div class="news-item"><span>OCT 29 · RELEASE 745</span><strong>Roblox Studio release notes 745</strong><button type="button" data-resource="releases">View official updates ↗</button></div>
+            <div class="news-item"><span>OCT 22 · RELEASE 743</span><strong>Luau local-limit improvements and faster table.find</strong><button type="button" data-resource="notes743">Read release notes ↗</button></div>
+            <button id="updatesMore" class="wide-button" type="button">↗ Official creator updates</button>
+            <button id="updatesBack" class="quiet-button" type="button">← Back to editor</button>
+          </div>
+
+          <div class="tip-card"><div class="tip-title">✧ ALEX TIP</div><p>Use <kbd>⌘S</kbd> or <kbd>Ctrl S</kbd> to save. Your tabs can be restored when you reopen the app.</p></div>
+        </aside>
+      </div>
+    </div>
+    <footer><span><span class="live-dot"></span> ALEX V3 · ROBLOX-ONLY WORKSPACE</span><span>Desktop editor · Own-place Studio testing · No Roblox Player injection</span></footer>
+  </main>
 </div>
+
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
-  <div class="settings-top"><h2 id="settingsTitle">ALEX Settings</h2><button id="settingsClose" type="button" aria-label="Close settings">✕</button></div>
+  <div class="settings-top"><div><span class="eyebrow">CUSTOMIZE YOUR DESK</span><h2 id="settingsTitle">Appearance settings</h2></div><button id="settingsClose" type="button" aria-label="Close settings">✕</button></div>
   <label for="themeSelect">Accent color</label>
-  <select id="themeSelect"><option value="purple">Purple</option><option value="blue">Electric Blue</option><option value="green">Emerald</option><option value="red">Crimson</option></select>
+  <select id="themeSelect"><option value="purple">Electric violet</option><option value="blue">Signal blue</option><option value="green">Neo mint</option><option value="red">Coral</option></select>
   <label for="backgroundSelect">Editor background</label>
-  <select id="backgroundSelect"><option value="midnight">Midnight</option><option value="black">Pitch Black</option><option value="slate">Slate</option><option value="plum">Purple Fog</option></select>
-  <label for="fontSize">Code text size <output id="fontSizeValue">13 px</output></label>
-  <input id="fontSize" type="range" min="11" max="26" step="1" value="13">
-  <label class="toggle-setting"><input id="wrapCode" type="checkbox"> Wrap long lines</label>
+  <select id="backgroundSelect"><option value="midnight">Deep space</option><option value="black">OLED black</option><option value="slate">Slate</option><option value="plum">Purple haze</option></select>
+  <label for="fontSize">Code text size <output id="fontSizeValue">13 px</output></label><input id="fontSize" type="range" min="11" max="26" step="1" value="13">
+  <label class="toggle-setting"><input id="wrapCode" type="checkbox"> Wrap long code lines</label>
   <label class="toggle-setting"><input id="saveTabs" type="checkbox" checked> Restore tabs after reopening</label>
-  <div class="settings-note">Preferences are saved only on this computer. Execute does not connect to Roblox Player.</div>
-  <button id="settingsReset" type="button">Reset appearance</button>
+  <div class="settings-note">Your appearance preferences stay on this computer. To execute scripts, use Roblox Studio in an experience you own.</div>
+  <button id="settingsReset" type="button">Restore default appearance</button>
 </dialog>
 <script src="renderer.js"></script>
 </body>

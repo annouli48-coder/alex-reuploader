@@ -38,6 +38,7 @@ jobs:
           node --check src/main.js
           node --check src/preload.js
           node --check src/renderer.js
+          node scripts/check-desktop.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -124,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG=alex-executor-v0.2.0
+          TAG=alex-executor-v0.3.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; refusing to overwrite binaries."
             exit 0
@@ -137,6 +138,6 @@ jobs:
             release-assets/ALEX-Executor-Setup-x64.exe \
             release-assets/ALEX-Executor-Setup-x64.exe.sha256 \
             --target "$GITHUB_SHA" \
-            --title 'ALEX Executor v0.2.0 - Desktop Starter (not a Roblox injector)' \
-            --notes 'Unsigned customizable starter: multi-tab Luau editor, font/theme/background settings, file open/save. No Roblox Player injection. No Roblox Player attach or execution engine. Check your downloads and OS security warnings.' \
+            --title 'ALEX Executor v0.3.0 - Roblox Creator Workspace (not an injector)' \
+            --notes 'Unsigned Roblox-only workspace: redesigned multi-tab Luau editor, creator templates, clipboard-to-Studio Test Lab workflow, curated official Roblox updates, font/theme controls and larger file support. No Roblox Player injection. Check OS security warnings.' \
             --prerelease

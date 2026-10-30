@@ -1,8 +1,8 @@
 {
   "name": "alex-executor-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Cross-platform ALEX Luau editor and installer starter; not a Roblox Player injector",
+  "description": "Roblox-only ALEX Luau workspace for macOS and Windows; not a Roblox Player injector",
   "main": "src/main.js",
   "license": "UNLICENSED",
   "scripts": {
