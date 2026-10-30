@@ -1,0 +1,39 @@
+{
+  "id": "./",
+  "name": "ALEX Code — Mobile Luau Editor",
+  "short_name": "ALEX Code",
+  "description": "An offline-capable, local Lua and Luau script editor. Not a Roblox Player executor.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07050d",
+  "theme_color": "#0b0615",
+  "orientation": "any",
+  "categories": [
+    "developer tools",
+    "utilities",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open code editor",
+      "short_name": "Editor",
+      "url": "./#workspace",
+      "description": "Edit Luau scripts locally"
+    }
+  ]
+}
