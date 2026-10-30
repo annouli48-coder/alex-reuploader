@@ -60,6 +60,14 @@ Requires Node.js 22 or newer. App can open/edit/save `.lua` and `.luau` files. R
 
 The **v0.3.0 desktop prerelease is targeted by the updated build workflow**; verify the release assets exist before running installers. GitHub Pages publication remains blocked on the repository's initial Pages setting. There is **no Roblox Player injection/execution engine**. The release is a desktop Luau editor with an owned-place Studio test workflow. The existing Reuploader repository `main` is untouched by this staging branch. New app versions require a new GitHub release tag plus the matching tag update in both installers and the workflow.
 
+## ALEX Studio Exporter — new creator tool
+
+A dedicated, installable **Roblox Studio local plugin** now lives in [`studio-exporter/ALEX_Studio_Exporter.plugin.luau`](./studio-exporter/ALEX_Studio_Exporter.plugin.luau). Use it with **a place you own or are authorized to edit**. Its docked V1 panel scans accessible Studio objects, counts scripts/models/parts/UI, displays progress and logs, and opens Studio's native selection export dialog (use `.rbxmx` for XML model files). For a complete XML `.rbxlx` place, use Studio's **File → Save to File**; the plugin provides the exact instructions.
+
+[Install instructions and limitations](./studio-exporter/README.md).
+
+This is **not** a Roblox Player injector, and it cannot copy inaccessible protected source from another creator's live experience. The plugin never contacts Railway or Roblox APIs directly to fetch hidden scripts.
+
 ## ALEX V3 Roblox-only interface
 
 V3 redesigns the desktop with a polished dark workspace, sidebar navigation, prominent script tabs, Roblox Luau branding, a compact activity log, an official Roblox update panel, and four creator templates (Player, TweenService, RemoteEvent and ScreenGui). It preserves multi-tab session restore, font/theme/background customization and line wrapping. The native open/save dialogs support Lua, Luau and plain-text source; the maximum file size is 8 MB so large exported Luau scripts can be opened. The Copy and Test in Studio actions copy the active script to the native clipboard and show step-by-step directions for testing in **an experience you own**. This does **not** directly execute code in Roblox or inject into the player. The new smoke check validates UI IDs and bridge wiring, and the native app uses an allowlist for external Roblox documentation links.
