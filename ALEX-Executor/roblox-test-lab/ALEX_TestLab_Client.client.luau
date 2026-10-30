@@ -161,3 +161,151 @@ remote.OnClientEvent:Connect(function(kind,data)
     end
 end)
 remote:FireServer("hello")
+
+-- ALEX UI V2: drag, resize, custom theme/background, and font size.
+-- This touch-ready interface appears ONLY in the creator-authorized test place.
+local UserInputService=game:GetService("UserInputService")
+local accent=Color3.fromRGB(119,50,201)
+local themeColors={
+    Purple=Color3.fromRGB(119,50,201),
+    Blue=Color3.fromRGB(37,115,202),
+    Green=Color3.fromRGB(23,141,111),
+    Pink=Color3.fromRGB(188,66,142),
+}
+local editorColors={
+    Midnight=Color3.fromRGB(9,6,16),
+    Black=Color3.fromRGB(2,2,5),
+    Slate=Color3.fromRGB(20,32,48),
+    Plum=Color3.fromRGB(40,16,52),
+}
+local settingsToggle=make("TextButton",{
+    Size=UDim2.fromOffset(35,30),Position=UDim2.new(1,-83,0,6),
+    BackgroundColor3=Color3.fromRGB(88,44,116),Text="⚙",
+    TextColor3=light,TextSize=19,Font=Enum.Font.GothamBold,
+},header)
+corner(settingsToggle,6)
+local settingsFrame=make("Frame",{
+    Size=UDim2.new(1,-24,0,246),Position=UDim2.fromOffset(12,47),
+    BackgroundColor3=Color3.fromRGB(32,19,47),BorderSizePixel=0,
+    Visible=false,ZIndex=20,
+},panel)
+corner(settingsFrame,10)
+make("UIStroke",{Color=Color3.fromRGB(128,77,175),Thickness=1},settingsFrame)
+local function settingLabel(text,y)
+    return make("TextLabel",{
+        Size=UDim2.new(1,-20,0,24),Position=UDim2.fromOffset(10,y),
+        BackgroundTransparency=1,Text=text,TextColor3=light,
+        TextSize=12,Font=Enum.Font.GothamBold,
+        TextXAlignment=Enum.TextXAlignment.Left,ZIndex=21,
+    },settingsFrame)
+end
+local function settingButton(name,text,x,y,width,action)
+    local b=make("TextButton",{
+        Name=name,Size=UDim2.fromOffset(width,27),
+        Position=UDim2.fromOffset(x,y),
+        BackgroundColor3=Color3.fromRGB(73,43,106),
+        BorderSizePixel=0,Text=text,TextColor3=light,
+        TextSize=12,Font=Enum.Font.GothamBold,ZIndex=21,
+    },settingsFrame)
+    corner(b,6)
+    b.MouseButton1Click:Connect(action)
+    return b
+end
+settingsToggle.MouseButton1Click:Connect(function()
+    settingsFrame.Visible=not settingsFrame.Visible
+end)
+settingLabel("COLOR THEME",7)
+local currentTheme="Purple"
+local themeNames={"Purple","Blue","Green","Pink"}
+for i,name in ipairs(themeNames) do
+    settingButton("Theme"..name,name,10+(i-1)*66,31,62,function()
+        currentTheme=name
+        accent=themeColors[name]
+        toggle.BackgroundColor3=accent
+        run.BackgroundColor3=accent
+        header.BackgroundColor3=accent:Lerp(Color3.new(0,0,0),0.57)
+    end)
+end
+settingLabel("CODE BACKGROUND",66)
+local backgroundNames={"Midnight","Black","Slate","Plum"}
+for i,name in ipairs(backgroundNames) do
+    settingButton("Background"..name,name,10+(i-1)*66,91,62,function()
+        editor.BackgroundColor3=editorColors[name]
+    end)
+end
+settingLabel("CODE TEXT SIZE",126)
+local sizeValue=make("TextLabel",{
+    Size=UDim2.fromOffset(85,27),Position=UDim2.fromOffset(77,150),
+    BackgroundTransparency=1,Text="14 px",TextColor3=light,
+    Font=Enum.Font.GothamBold,TextSize=14,ZIndex=21,
+},settingsFrame)
+settingButton("Smaller","A−",10,150,59,function()
+    editor.TextSize=math.max(11,editor.TextSize-1)
+    sizeValue.Text=tostring(editor.TextSize).." px"
+end)
+settingButton("Larger","A+",167,150,59,function()
+    editor.TextSize=math.min(26,editor.TextSize+1)
+    sizeValue.Text=tostring(editor.TextSize).." px"
+end)
+settingLabel("Drag the top bar to move · bottom-right to resize",191)
+local resizeHandle=make("TextButton",{
+    Name="ResizeHandle",Size=UDim2.fromOffset(38,34),
+    AnchorPoint=Vector2.new(1,1),
+    Position=UDim2.new(1,-3,1,-3),
+    Text="◢",TextColor3=Color3.fromRGB(214,180,249),
+    TextSize=21,Font=Enum.Font.GothamBold,
+    BackgroundColor3=Color3.fromRGB(41,24,59),
+    BackgroundTransparency=0.15,
+    ZIndex=12,
+},panel)
+corner(resizeHandle,7)
+-- UI constraints are clamped to the active viewport, including phones in portrait.
+local dragSession=nil
+local function viewport()
+    local camera=workspace.CurrentCamera
+    if camera then return camera.ViewportSize end
+    return Vector2.new(800,600)
+end
+local function beginMotion(input,mode)
+    if input.UserInputType~=Enum.UserInputType.MouseButton1 and
+       input.UserInputType~=Enum.UserInputType.Touch then return end
+    local center=panel.AbsolutePosition+panel.AbsoluteSize/2
+    dragSession={
+        source=input,mode=mode,
+        start=input.Position,
+        center=center,
+        size=panel.AbsoluteSize,
+    }
+end
+header.InputBegan:Connect(function(input)
+    if settingsFrame.Visible then return end
+    beginMotion(input,"drag")
+end)
+resizeHandle.InputBegan:Connect(function(input)
+    beginMotion(input,"resize")
+end)
+UserInputService.InputChanged:Connect(function(input)
+    local state=dragSession
+    if not state then return end
+    if input~=state.source and not (
+        state.source.UserInputType==Enum.UserInputType.MouseButton1
+        and input.UserInputType==Enum.UserInputType.MouseMovement
+    ) then return end
+    local delta=input.Position-state.start
+    local v=viewport()
+    if state.mode=="drag" then
+        local half=panel.AbsoluteSize/2
+        local x=math.clamp(state.center.X+delta.X,half.X,v.X-half.X)
+        local y=math.clamp(state.center.Y+delta.Y,half.Y,v.Y-half.Y)
+        panel.Position=UDim2.fromOffset(x,y)
+    else
+        local maxWidth=math.max(220,math.min(730,v.X-12))
+        local maxHeight=math.max(240,math.min(600,v.Y-12))
+        local w=math.clamp(state.size.X+delta.X,math.min(maxWidth,280),maxWidth)
+        local h=math.clamp(state.size.Y+delta.Y,math.min(maxHeight,300),maxHeight)
+        panel.Size=UDim2.fromOffset(w,h)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if dragSession and input==dragSession.source then dragSession=nil end
+end)
