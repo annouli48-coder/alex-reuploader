@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; object-src 'none'; base-uri 'none'">
+<title>ALEX Decompiler</title>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo"><span>D</span><i>◈</i></div><div><strong>ALEX</strong><small>DECOMPILER / V1</small></div></div>
+    <div class="side-label">WORKSPACE</div>
+    <div class="side-active"><span>◈</span> Local Decompiler <b>01</b></div>
+    <div class="side-item"><span>◫</span> Roblox XML place</div>
+    <div class="side-item"><span>▤</span> Export scripts</div>
+    <div class="divider"></div>
+    <div class="side-label">ENGINE</div>
+    <div class="engine-block"><div><i class="dot"></i><b>LOCKED ENGINE</b></div><p>One built-in analyzer. No custom Lua editor or arbitrary script execution.</p></div>
+    <div class="side-bottom"><div><i class="dot"></i> Desktop engine ready</div><small>Offline · Files stay on your Mac</small></div>
+  </aside>
+  <main>
+    <header class="header"><div><div class="eyebrow">ROBLOX / LOCAL PLACE TOOLKIT</div><h1>Decompiler <span>Workspace</span></h1><p>Open an authorized Roblox Studio XML place. Extract saved Luau source with one click.</p></div><div class="pill"><span class="diamond"></span> STUDIO FILES ONLY</div></header>
+    <div class="inner">
+      <section class="top-grid">
+        <div class="hero"><div class="hero-spark">◈</div><div class="eyebrow">ALEX DECOMPILER ENGINE</div><h2>One tool.<br><em>One job.</em></h2><p>The engine is built into the app. There is no place to paste or change the program.</p><div class="hero-bar"><span>◆ FIXED ENGINE</span><span>◆ LOCAL FILES</span><span>◆ NO LOGIN</span></div></div>
+        <div class="file-card"><div class="card-heading"><span class="purple">01</span> INPUT FILE</div><div class="target" id="target"><span class="target-icon">↳</span><div><strong id="filename">No Roblox place selected</strong><small id="fileType">.rbxlx / .rbxmx supported</small></div></div><button id="choose" class="secondary" type="button">＋ Choose Roblox XML file</button><div class="file-hint">Use Roblox Studio → File → Save to File → Roblox XML Place (.rbxlx).</div></div>
+      </section>
+      <div class="work-grid">
+        <section class="stage"><div class="card-heading"><span class="purple">02</span> EXECUTION</div><div class="locked"><div class="lock-icon">▣</div><div><strong>Decompiler engine is locked</strong><p>Users cannot paste, edit, or copy the built-in analyzer through this interface.</p></div><span>READ ONLY</span></div><label class="confirm"><input id="authorized" type="checkbox"><span>I own this Studio project or have permission to extract its accessible content.</span></label><button id="execute" class="execute" type="button" disabled><span>▶</span> Execute Decompiler</button><div class="progress-wrap"><div class="progress"><div id="fill"></div></div><span id="percent">0%</span></div><div id="status" class="status">Choose an XML file and confirm access to begin.</div><div class="metrics"><div><small>OBJECTS</small><strong id="objects">—</strong></div><div><small>SCRIPT INSTANCES</small><strong id="scripts">—</strong></div><div><small>SAVED LUAU SOURCES</small><strong id="readable">—</strong></div></div></section>
+        <section class="results"><div class="card-heading"><span class="purple">03</span> OUTPUT &amp; LOGS <button id="docs" class="doc" type="button">Format help ↗</button></div><div id="log" class="log" role="log" aria-live="polite">[ALEX] Ready. Choose your own Studio XML place file.</div><button id="export" class="secondary export" type="button" disabled>↓ Export extracted scripts + report</button><div class="warning"><strong>Important:</strong> This analyzes scripts already saved in your local place. It does not decompile bytecode, inject into Roblox Player, or read hidden code from a live game.</div></section>
+      </div>
+    </div>
+    <footer><span>◈ ALEX DECOMPILER V1</span><span>Offline XML analyzer · macOS / Windows · Not affiliated with Roblox</span></footer>
+  </main>
+</div>
+<script src="renderer.cjs"></script>
+</body></html>
