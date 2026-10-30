@@ -1,0 +1,71 @@
+name: Publish ALEX Download Website
+on:
+  push:
+    branches: [alex-executor-starter]
+    paths:
+      - 'ALEX-Executor/site/**'
+      - 'ALEX-Executor/scripts/generate_icons.py'
+      - '.github/workflows/alex-executor-website.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: alex-site-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-site:
+    name: Test and package ALEX website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate website source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check ALEX-Executor/site/app.js
+          node --check ALEX-Executor/site/sw.js
+          python -m json.tool ALEX-Executor/site/manifest.webmanifest > /dev/null
+          test -s ALEX-Executor/site/index.html
+          test -s ALEX-Executor/site/styles.css
+          grep -q 'id="workspace"' ALEX-Executor/site/index.html
+          grep -q 'data-asset="ALEX-Executor-Setup-x64.exe"' ALEX-Executor/site/index.html
+      - name: Generate branded mobile home-screen icon
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          python ALEX-Executor/scripts/generate_icons.py
+          cp ALEX-Executor/build/icon.png ALEX-Executor/site/icon.png
+          test -s ALEX-Executor/site/icon.png
+      - name: Upload inspectable website ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ALEX-Download-Site
+          path: ALEX-Executor/site/
+          retention-days: 14
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ALEX-Executor/site/
+  deploy:
+    name: Deploy ALEX website to GitHub Pages
+    needs: build-site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages (repository Pages must be enabled)
+        uses: actions/configure-pages@v5
+      - name: Deploy ALEX
+        id: deployment
+        uses: actions/deploy-pages@v4
