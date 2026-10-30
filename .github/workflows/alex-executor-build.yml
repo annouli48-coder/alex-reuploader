@@ -3,7 +3,10 @@ on:
   push:
     branches: [alex-executor-starter]
     paths:
-      - 'ALEX-Executor/**'
+      - 'ALEX-Executor/src/**'
+      - 'ALEX-Executor/install/**'
+      - 'ALEX-Executor/scripts/generate_icons.py'
+      - 'ALEX-Executor/package.json'
       - '.github/workflows/alex-executor-build.yml'
   workflow_dispatch:
 permissions:
