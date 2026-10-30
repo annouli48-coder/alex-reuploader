@@ -6,7 +6,7 @@ Cross-platform Electron/Luau editor with script open/save, dark-purple UI, and o
 
 The project is stored in the `alex-executor-starter` branch of `annouli48-coder/alex-reuploader` in the `ALEX-Executor` folder. It is **not a standalone repository**. Existing code and Railway deployment on `main` were not changed.
 
-## Install commands — only once a release is published
+## Install commands — only after the automatic prerelease succeeds
 
 macOS (Intel and Apple Silicon):
 
@@ -26,7 +26,7 @@ irm https://raw.githubusercontent.com/annouli48-coder/alex-reuploader/alex-execu
 - `ALEX-Executor-mac-x64.zip` and `.sha256`
 - `ALEX-Executor-Setup-x64.exe` and `.sha256`
 
-Builds are defined in `.github/workflows/alex-executor-build.yml` for the staging branch. Build artifacts must be verified and uploaded to that tagged Release. Review scripts before running remote install commands. Signing and notarization are recommended for public distribution.
+Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.1.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
 
 ## Local development
 
@@ -37,3 +37,7 @@ npm start
 ```
 
 Requires Node.js 22 or newer. App can open/edit/save `.lua` and `.luau` files. Roblox Player script injection is **not** implemented. No source obfuscation, process injection or anti-cheat bypass is included. GitHub Actions compilation and live installs have not yet been verified.
+
+## Important release notes
+
+The GitHub Actions run must be completed successfully for download links to work. There is currently **no Roblox Player injection/execution engine**. The initial starter release is a desktop Luau file editor. The existing Reuploader repository `main` is untouched by this staging branch. New app versions require a new GitHub release tag plus the matching tag update in both installers and the workflow.
