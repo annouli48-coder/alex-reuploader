@@ -198,6 +198,7 @@ function saveSettings() {
   applySettings();remember();
 }
 function showPanel(which) {
+  document.body.dataset.panel=which;
   for(const panel of ['editor','testLab','updates']) {
     $(panel==='editor'?'editorPanel':panel==='testLab'?'testLabPanel':'updatesPanel')
       .classList.toggle('hidden',panel!==which);
