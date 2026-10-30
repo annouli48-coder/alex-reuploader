@@ -11,6 +11,7 @@
  <aside>
   <div class="brand"><span class="logo">A</span><div><strong>ALEX</strong><small>EXECUTOR V1</small></div></div>
   <div class="subhead">WORKSPACE</div>
+  <button id="settingsOpen" type="button">⚙ Appearance & Settings</button>
   <button id="newScript">＋ New Script</button>
   <div class="subhead examples">QUICK SCRIPTS</div>
   <button class="example" data-code="print(&quot;Hello from ALEX!&quot;)">◇ Hello World</button>
@@ -19,6 +20,7 @@
  </aside>
  <main>
   <header><div><small>DEVELOPER WORKSPACE</small><h1>Script Editor <em>V1</em></h1></div><span class="tag">Windows · macOS</span></header>
+  <div class="tabs" id="tabs" role="tablist" aria-label="Open scripts"></div>
   <div class="toolbar">
     <div class="file"><span id="filename">untitled.luau</span><span id="unsaved">*</span></div>
     <div class="buttons"><button id="open">Open</button><button id="save">Save</button><button id="clear">Clear</button><button id="attach">Attach</button><button class="primary" id="execute">Execute ▶</button></div>
@@ -27,9 +29,22 @@
 print("Hello from ALEX!")</textarea></div>
   <div class="console-title">OUTPUT <button id="clearLog">Clear logs</button></div>
   <pre id="output">Editor is ready. No Roblox Player execution engine is included.</pre>
-  <footer>Local Luau editor and installer starter · No Roblox injection engine</footer>
+  <footer>Local Luau editor · Test Lab for your own games · Roblox Player injection is not implemented</footer>
  </main>
 </div>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle">
+  <div class="settings-top"><h2 id="settingsTitle">ALEX Settings</h2><button id="settingsClose" type="button" aria-label="Close settings">✕</button></div>
+  <label for="themeSelect">Accent color</label>
+  <select id="themeSelect"><option value="purple">Purple</option><option value="blue">Electric Blue</option><option value="green">Emerald</option><option value="red">Crimson</option></select>
+  <label for="backgroundSelect">Editor background</label>
+  <select id="backgroundSelect"><option value="midnight">Midnight</option><option value="black">Pitch Black</option><option value="slate">Slate</option><option value="plum">Purple Fog</option></select>
+  <label for="fontSize">Code text size <output id="fontSizeValue">13 px</output></label>
+  <input id="fontSize" type="range" min="11" max="26" step="1" value="13">
+  <label class="toggle-setting"><input id="wrapCode" type="checkbox"> Wrap long lines</label>
+  <label class="toggle-setting"><input id="saveTabs" type="checkbox" checked> Restore tabs after reopening</label>
+  <div class="settings-note">Preferences are saved only on this computer. Execute does not connect to Roblox Player.</div>
+  <button id="settingsReset" type="button">Reset appearance</button>
+</dialog>
 <script src="renderer.js"></script>
 </body>
 </html>
