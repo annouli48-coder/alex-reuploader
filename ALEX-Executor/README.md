@@ -1,4 +1,4 @@
-# ALEX Executor V1 — Windows and macOS
+# ALEX Executor V2 (v0.2.0) — Windows and macOS
 
 Cross-platform Electron/Luau editor with script open/save, dark-purple UI, and one-line installers. **This starter does NOT inject or execute scripts inside Roblox Player.** The Attach and Execute buttons are intentionally nonfunctional and display informative messages.
 
@@ -6,7 +6,7 @@ Cross-platform Electron/Luau editor with script open/save, dark-purple UI, and o
 
 The project is stored in the `alex-executor-starter` branch of `annouli48-coder/alex-reuploader` in the `ALEX-Executor` folder. It is **not a standalone repository**. Existing code and Railway deployment on `main` were not changed.
 
-## Install commands — only after the automatic prerelease succeeds
+## Install commands — v0.2.0 prerelease published
 
 macOS (Intel and Apple Silicon):
 
@@ -20,19 +20,19 @@ Windows (PowerShell, x64):
 irm https://raw.githubusercontent.com/annouli48-coder/alex-reuploader/alex-executor-starter/ALEX-Executor/install/install-windows.ps1 | iex
 ```
 
-**These commands are not usable until a GitHub Release tagged `alex-executor-v0.2.0` exists with files:**
+**Verified release status (October 30, 2026):** The `alex-executor-v0.2.0` prerelease was published successfully, with all six downloadable assets:
 
 - `ALEX-Executor-mac-arm64.zip` and `.sha256`
 - `ALEX-Executor-mac-x64.zip` and `.sha256`
 - `ALEX-Executor-Setup-x64.exe` and `.sha256`
 
-Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.2.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
+Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. The [v0.2.0 build workflow completed successfully](https://github.com/annouli48-coder/alex-reuploader/actions/runs/41126268585), published the [v0.2.0 prerelease](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.2.0), and uploaded three platform packages plus matching SHA-256 files. The macOS script detects Intel versus Apple Silicon and verifies its downloaded ZIP before installing in `~/Applications`. The Windows script verifies its setup executable before running it. Review remote scripts before running them; signing and notarization are recommended for wider distribution. These are unsigned editor builds and may be blocked by OS security protections. Actual install and launch on users' machines have not been independently verified.
 
 ## Download website and phone/tablet version
 
 The `site/` folder contains the ALEX Code mobile PWA and desktop download hub. The website source is deployed by `.github/workflows/alex-executor-website.yml` to the intended URL `https://annouli48-coder.github.io/alex-reuploader/`.
 
-**Publishing prerequisite:** GitHub Pages must be enabled in the repository's **Settings → Pages → Build and deployment → Source: GitHub Actions**. The automatic deploy can only succeed after that GitHub setting exists; having source files on a branch doesn't itself make the URL public. Check the Pages workflow run and the live URL before advertising the site.
+**Publishing prerequisite (still required):** The [website build succeeded but Pages deployment failed](https://github.com/annouli48-coder/alex-reuploader/actions/runs/41126119901) because Pages is not enabled. The repository owner must open [Settings → Pages](https://github.com/annouli48-coder/alex-reuploader/settings/pages) and select **Build and deployment → Source: GitHub Actions**. Then open [the failed website workflow run](https://github.com/annouli48-coder/alex-reuploader/actions/runs/41126119901) and use **Re-run jobs → Re-run failed jobs**. The site target is `https://annouli48-coder.github.io/alex-reuploader/`; verify it loads before sharing the URL. GitHub's default `GITHUB_TOKEN` cannot enable Pages automatically in this repository. Until that setting is changed, the site is not confirmed live.
 
 The same mobile PWA works on iPhone/iPad Safari and supported Android browsers. iOS install: Safari Share → Add to Home Screen; Android: Chrome menu → Install app / Add to Home screen. Phones install this **web app**, not an IPA/APK, and they cannot execute scripts inside Roblox Player. The built-in editor saves in browser-local storage; use **Export** for backup. There is no backend or script upload. Desktop buttons enable only for verified assets and matching SHA-256 files in a real GitHub prerelease. Windows support targets x64; macOS targets Intel x64 and Apple Silicon arm64, not every historical OS.
 
@@ -58,7 +58,7 @@ Requires Node.js 22 or newer. App can open/edit/save `.lua` and `.luau` files. R
 
 ## Important release notes
 
-The GitHub Actions run must be completed successfully for download links to work. There is currently **no Roblox Player injection/execution engine**. The initial starter release is a desktop Luau file editor. The existing Reuploader repository `main` is untouched by this staging branch. New app versions require a new GitHub release tag plus the matching tag update in both installers and the workflow.
+The **v0.2.0 desktop prerelease is published**; download links are available now. GitHub Pages publication remains blocked on the repository's initial Pages setting. There is currently **no Roblox Player injection/execution engine**. The starter release is a desktop Luau file editor. The existing Reuploader repository `main` is untouched by this staging branch. New app versions require a new GitHub release tag plus the matching tag update in both installers and the workflow.
 
 ## ALEX V2 interface updates
 
