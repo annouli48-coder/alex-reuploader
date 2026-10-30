@@ -1,0 +1,38 @@
+/* ALEX floating overlay: visible inside the ALEX PWA, not over other apps. */
+:root{--alex-ui-accent:#a66cff;--alex-code-bg:#0c0813}
+#alex-launcher[hidden],#alex-floating[hidden]{display:none!important}
+#alex-launcher{position:fixed;z-index:90;right:max(17px,env(safe-area-inset-right));bottom:max(19px,env(safe-area-inset-bottom));width:62px;height:62px;display:grid;place-items:center;color:#eee0ff;background:linear-gradient(135deg,#a66cff,#5826a5);border:2px solid #e9ceff;border-radius:19px;box-shadow:0 0 0 4px #150c22,0 15px 46px #000a,0 0 25px #883bca99;font:bold italic 39px/1 var(--font);touch-action:manipulation}
+#alex-launcher:hover{filter:brightness(1.12)}
+#alex-floating{position:fixed;z-index:100;left:6vw;top:15dvh;width:min(88vw,580px);height:min(76dvh,560px);min-width:270px;min-height:290px;max-width:calc(100vw - 4px);max-height:calc(100dvh - 4px);display:flex;flex-direction:column;border:2px solid var(--alex-ui-accent);background:#120b1d;border-radius:14px;overflow:hidden;box-shadow:0 20px 80px #000e,0 0 35px #8127ce55}
+.alex-float-header{height:48px;min-height:48px;background:#29173c;display:flex;align-items:center;gap:9px;padding:0 10px;touch-action:none;cursor:move;user-select:none}
+.alex-panel-logo{display:grid;place-items:center;width:26px;height:26px;background:var(--alex-ui-accent);border-radius:7px;color:#08040e;font:bold italic 20px var(--font)}
+.alex-float-header strong{font:700 13px var(--font);letter-spacing:.05em;white-space:nowrap;margin-right:auto}
+.alex-float-header strong span{font-size:9px;letter-spacing:.1em;color:#c7b1d7}
+.alex-float-header button{background:#3c2550;border:1px solid #79568d;color:#f5e6ff;border-radius:6px;width:28px;height:29px;font-size:18px;flex-shrink:0;cursor:pointer}
+.alex-float-content{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#alex-floating .workspace-window{flex:1;display:flex;flex-direction:column;border:0;border-radius:0;box-shadow:none;min-height:0;background:#100a19}
+#alex-floating .workspace-topline{height:30px;min-height:30px;font-size:9px}
+#alex-floating .workspace-toolbar{display:flex;align-items:stretch;flex-direction:column;padding:7px 9px;gap:5px}
+#alex-floating .workspace-toolbar input{max-width:100%;width:100%;font-size:12px}
+#alex-floating .workspace-buttons{display:flex;flex-wrap:wrap;gap:5px}
+#alex-floating .workspace-buttons button{font-size:10px;padding:7px 9px}
+#alex-floating .workspace-content{flex:1;min-height:70px;overflow:hidden;background:var(--alex-code-bg)}
+#alex-floating .workspace-content textarea{resize:none;min-height:0;height:100%;background:var(--alex-code-bg);font-family:Menlo,Consolas,monospace}
+#alex-floating .workspace-footer{min-height:40px;font-size:9px;line-height:1.3;align-items:center}
+#alex-resize{position:absolute;right:0;bottom:0;width:32px;height:32px;display:grid;place-items:end;color:var(--alex-ui-accent);padding:6px;cursor:nwse-resize;touch-action:none;user-select:none;background:linear-gradient(135deg,transparent 25%,#2d124b 100%)}
+#alex-floating .workspace-topline{background:#1a1029}
+#alex-appearance{color:#f7eaff;background:linear-gradient(150deg,#241635,#0b0814);border:1px solid #a66cff;border-radius:14px;box-shadow:0 24px 80px #000d;width:min(92vw,435px);padding:20px;z-index:105}
+#alex-appearance::backdrop{background:#030206cf}
+.alex-settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.alex-settings-head button{background:#39234e;border:1px solid #6d487e;color:white;border-radius:8px;padding:4px 11px}
+#alex-appearance label{display:flex;justify-content:space-between;gap:12px;margin:15px 0 7px;font-size:13px;font-weight:700}
+#alex-appearance select{display:block;width:100%;padding:10px;background:#25162f;color:white;border:1px solid #79548d;border-radius:7px}
+#alex-appearance input[type=range]{width:100%;accent-color:var(--alex-ui-accent)}
+#alex-appearance label.alex-check{justify-content:flex-start;align-items:center}
+#alex-appearance input[type=checkbox]{accent-color:var(--alex-ui-accent)}
+#alex-appearance p{color:#a995bd;font-size:12px;line-height:1.6;margin:20px 0}
+#alex-appearance #alex-settings-reset{width:100%;background:#312041;border:1px solid #7a5096;color:white;border-radius:8px;padding:10px}
+.workspace-content{background:var(--alex-code-bg)}
+.workspace-content textarea{background:var(--alex-code-bg)}
+#alex-inline-settings{border-color:var(--alex-ui-accent)}
+@media(max-width:550px){#alex-floating{top:15dvh;left:4vw;width:92vw;height:70dvh}.alex-float-header strong span{display:none}#alex-floating .workspace-right{display:none}#alex-floating .workspace-footer #editor-lines{display:none}}
