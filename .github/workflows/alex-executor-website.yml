@@ -66,6 +66,8 @@ jobs:
     steps:
       - name: Configure Pages (repository Pages must be enabled)
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Deploy ALEX
         id: deployment
         uses: actions/deploy-pages@v4
