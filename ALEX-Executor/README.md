@@ -28,6 +28,14 @@ irm https://raw.githubusercontent.com/annouli48-coder/alex-reuploader/alex-execu
 
 Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.1.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
 
+## Download website and phone/tablet version
+
+The `site/` folder contains the ALEX Code mobile PWA and desktop download hub. The website source is deployed by `.github/workflows/alex-executor-website.yml` to the intended URL `https://annouli48-coder.github.io/alex-reuploader/`.
+
+**Publishing prerequisite:** GitHub Pages must be enabled in the repository's **Settings → Pages → Build and deployment → Source: GitHub Actions**. The automatic deploy can only succeed after that GitHub setting exists; having source files on a branch doesn't itself make the URL public. Check the Pages workflow run and the live URL before advertising the site.
+
+The same mobile PWA works on iPhone/iPad Safari and supported Android browsers. iOS install: Safari Share → Add to Home Screen; Android: Chrome menu → Install app / Add to Home screen. Phones install this **web app**, not an IPA/APK, and they cannot execute scripts inside Roblox Player. The built-in editor saves in browser-local storage; use **Export** for backup. There is no backend or script upload. Desktop buttons enable only for verified assets and matching SHA-256 files in a real GitHub prerelease. Windows support targets x64; macOS targets Intel x64 and Apple Silicon arm64, not every historical OS.
+
 ## Custom icons and installer branding
 
 - macOS Finder, Dock, and Launchpad use the purple **ALEX** tile embedded as `build/icon.icns`.
