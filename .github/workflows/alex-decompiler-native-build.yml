@@ -1,0 +1,125 @@
+name: Build ALEX Decompiler Desktop
+on:
+  push:
+    branches: [alex-executor-starter]
+    paths:
+      - 'ALEX-Decompiler/**'
+      - '.github/workflows/alex-decompiler-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: alex-decompiler-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: mac-both
+          - os: windows-latest
+            label: win-x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Validate app JavaScript and deterministic parser
+        shell: bash
+        working-directory: ALEX-Decompiler
+        run: |
+          node --check src/main.cjs
+          node --check src/preload.cjs
+          node --check src/worker.cjs
+          node --check src/renderer.cjs
+          node --check src/analyzer.cjs
+          npm test
+      - name: Generate distinct icon
+        shell: bash
+        working-directory: ALEX-Decompiler
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          python scripts/generate_icon.py
+          test -s build/icon.icns
+          test -s build/icon.ico
+      - name: Install desktop dependencies
+        working-directory: ALEX-Decompiler
+        run: npm install --no-audit --no-fund
+      - name: Build Mac ARM64 and x64
+        if: runner.os == 'macOS'
+        working-directory: ALEX-Decompiler
+        shell: bash
+        env: {CSC_IDENTITY_AUTO_DISCOVERY: 'false'}
+        run: |
+          npm run dist:mac:arm64
+          npm run dist:mac:x64
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        working-directory: ALEX-Decompiler
+        env: {CSC_IDENTITY_AUTO_DISCOVERY: 'false'}
+        run: npm run dist:win:x64
+      - name: Hash Mac bundles
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd ALEX-Decompiler/dist
+          for asset in ALEX-Decompiler-mac-arm64.zip ALEX-Decompiler-mac-x64.zip; do
+            test -s "$asset"
+            shasum -a 256 "$asset" > "$asset.sha256"
+          done
+      - name: Hash Windows setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $f = Get-Item ALEX-Decompiler/dist/ALEX-Decompiler-Setup-x64.exe
+          $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText($f.FullName+'.sha256', "$hash  $($f.Name)")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ALEX-Decompiler-${{ matrix.label }}
+          path: |
+            ALEX-Decompiler/dist/ALEX-Decompiler-mac-*.zip
+            ALEX-Decompiler/dist/ALEX-Decompiler-Setup-x64.exe
+            ALEX-Decompiler/dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+  prerelease:
+    name: Publish native ALEX Decompiler v1.0.0
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ALEX-Decompiler-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify packaged files and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          for asset in ALEX-Decompiler-mac-arm64.zip ALEX-Decompiler-mac-x64.zip ALEX-Decompiler-Setup-x64.exe; do
+            test -s "$asset"
+            test -s "$asset.sha256"
+            sha256sum -c "$asset.sha256"
+          done
+      - name: Publish release without overwriting existing packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=alex-decompiler-native-v1.0.0
+          if gh release view "$TAG" >/dev/null 2>&1; then echo 'Release already exists'; exit 0; fi
+          gh release create "$TAG" release-assets/* \
+            --target "$GITHUB_SHA" \
+            --title 'ALEX Decompiler Native v1.0.0 - macOS and Windows' \
+            --notes 'Single-purpose local Roblox XML place/model analyzer, with no editable Lua input, no script copying in UI, no Roblox Player injection. Parses exported owned/authorized .rbxlx/.rbxmx and extracts existing Luau source. Unsigned Mac/Windows prerelease.' --prerelease

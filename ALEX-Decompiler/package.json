@@ -1,0 +1,51 @@
+{
+  "name": "alex-decompiler-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native Mac and Windows offline Roblox Studio XML place analyzer; no external website or launcher required",
+  "main": "src/main.cjs",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs && node scripts/check-ui.cjs",
+    "dist:mac:arm64": "electron-builder --mac zip --arm64 --publish never",
+    "dist:mac:x64": "electron-builder --mac zip --x64 --publish never",
+    "dist:win:x64": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.alex.decompiler",
+    "productName": "ALEX Decompiler",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "zip"
+      ],
+      "artifactName": "ALEX-Decompiler-mac-${arch}.${ext}",
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "ALEX-Decompiler-Setup-${arch}.${ext}",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": null
+  }
+}
