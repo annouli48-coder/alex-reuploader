@@ -1,6 +1,6 @@
 /* ALEX Code PWA cache: only same-origin application files, never script content. */
-const CACHE = 'alex-code-pwa-v1';
-const ASSETS = ['./','./index.html','./styles.css','./app.js','./icon.svg','./icon.png','./manifest.webmanifest'];
+const CACHE = 'alex-code-pwa-v2';
+const ASSETS = ['./','./index.html','./styles.css','./floating.css','./app.js','./floating.js','./icon.svg','./icon.png','./manifest.webmanifest'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
