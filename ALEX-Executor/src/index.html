@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'">
+<title>ALEX Executor</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+ <aside>
+  <div class="brand"><span class="logo">A</span><div><strong>ALEX</strong><small>EXECUTOR V1</small></div></div>
+  <div class="subhead">WORKSPACE</div>
+  <button id="newScript">＋ New Script</button>
+  <div class="subhead examples">QUICK SCRIPTS</div>
+  <button class="example" data-code="print(&quot;Hello from ALEX!&quot;)">◇ Hello World</button>
+  <button class="example" data-code="local Players = game:GetService(&quot;Players&quot;)&#10;print(Players.LocalPlayer and Players.LocalPlayer.Name)">◇ Current Player</button>
+  <div class="bottom"><span class="dot"></span> Desktop editor ready<small>Roblox runtime not attached</small></div>
+ </aside>
+ <main>
+  <header><div><small>DEVELOPER WORKSPACE</small><h1>Script Editor <em>V1</em></h1></div><span class="tag">Windows · macOS</span></header>
+  <div class="toolbar">
+    <div class="file"><span id="filename">untitled.luau</span><span id="unsaved">*</span></div>
+    <div class="buttons"><button id="open">Open</button><button id="save">Save</button><button id="clear">Clear</button><button id="attach">Attach</button><button class="primary" id="execute">Execute ▶</button></div>
+  </div>
+  <div class="editor"><pre id="lines"></pre><textarea id="code" spellcheck="false" aria-label="Luau code editor">-- Welcome to ALEX Executor
+print("Hello from ALEX!")</textarea></div>
+  <div class="console-title">OUTPUT <button id="clearLog">Clear logs</button></div>
+  <pre id="output">Editor is ready. No Roblox Player execution engine is included.</pre>
+  <footer>Local Luau editor and installer starter · No Roblox injection engine</footer>
+ </main>
+</div>
+<script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "name": "alex-executor-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform ALEX Luau editor and installer starter; not a Roblox Player injector",
+  "main": "src/main.js",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac:arm64": "electron-builder --mac zip --arm64 --publish never",
+    "dist:mac:x64": "electron-builder --mac zip --x64 --publish never",
+    "dist:win:x64": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.alex.executor",
+    "productName": "ALEX Executor",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "zip"
+      ],
+      "artifactName": "ALEX-Executor-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "ALEX-Executor-Setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": null
+  }
+}

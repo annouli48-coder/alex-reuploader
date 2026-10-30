@@ -1,0 +1,58 @@
+name: Build ALEX Executor
+on:
+  push:
+    branches: [alex-executor-starter]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            task: dist:mac:arm64
+            label: mac-arm64
+          - os: macos-latest
+            task: dist:mac:x64
+            label: mac-x64
+          - os: windows-latest
+            task: dist:win:x64
+            label: win-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        working-directory: ALEX-Executor
+        run: npm install --no-audit --no-fund
+      - name: Package desktop app
+        working-directory: ALEX-Executor
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run ${{ matrix.task }}
+      - name: Hash macOS ZIP
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd ALEX-Executor/dist
+          for f in *.zip; do shasum -a 256 "$f" > "$f.sha256"; done
+      - name: Hash Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem ALEX-Executor/dist -Filter '*.exe' | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+            Set-Content ($_.FullName + '.sha256') "$h  $($_.Name)" -NoNewline
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ALEX-${{ matrix.label }}
+          path: |
+            ALEX-Executor/dist/*.zip
+            ALEX-Executor/dist/*.exe
+            ALEX-Executor/dist/*.sha256
+          if-no-files-found: error
