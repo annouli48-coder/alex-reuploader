@@ -28,11 +28,21 @@ irm https://raw.githubusercontent.com/annouli48-coder/alex-reuploader/alex-execu
 
 Builds are defined in the repository-root `.github/workflows/alex-executor-build.yml` for the staging branch. **After all three builds pass**, the new publishing job verifies hashes and automatically creates a GitHub **prerelease** with the six required files. [Check the release here](https://github.com/annouli48-coder/alex-reuploader/releases/tag/alex-executor-v0.1.0) before running any installer. The workflow does not overwrite existing releases. Review remote scripts before running them; signing and notarization are recommended for distribution. These are unsigned editor builds and may be blocked by OS security protections.
 
+## Custom icons and installer branding
+
+- macOS Finder, Dock, and Launchpad use the purple **ALEX** tile embedded as `build/icon.icns`.
+- Windows setup executable, Start menu, and desktop shortcut use `build/icon.ico`.
+- Both one-command installers print an **ALEX EXECUTOR INSTALLER** ASCII-art banner and show download/verification/install messages.
+- Source artwork is generated deterministically by `ALEX-Executor/scripts/generate_icons.py` (Pillow); the GitHub workflow generates it before compiling each platform. The artwork is original ALEX branding, not an Opiumware icon.
+- The actual .app and .exe need a successful new GitHub Actions build. Previous build artifacts without icon support are not updated retroactively.
+
 ## Local development
 
 ```bash
 cd ALEX-Executor
 npm install
+python3 -m pip install Pillow==11.3.0
+python3 scripts/generate_icons.py
 npm start
 ```
 
